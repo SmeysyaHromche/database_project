@@ -28,7 +28,6 @@ create table Worker(
 	firstName VARCHAR(20) NOT NULL,
 	secondName VARCHAR(20) NOT NULL,
 	bankBranch NUMBER NOT NULL, -- specific value
-	nationalID VARCHAR NOT NULL UNIQUE,
 	workTelefonNumber VARCHAR(13) NOT NULL,
 	workEMail VARCHAR(50) NOT NULL,
 );
@@ -38,6 +37,8 @@ CREATE TABLE Account(
 	dayLimit NUMBER NOT NULL,
 	secretNumber NUMBER NOT NULL, -- specific value
 	owner NUMBER NOT NULL,
+	balance NUMBER NOT NULL,
+	currency VARCHAR(3) NOT NULL,
 );
 
 CREATE TABLE AccountStatement(
@@ -55,9 +56,10 @@ CREATE TABLE BankTransaction(
 	transactionDate TIMESTAMP NOT NULL,
 	fromAccountId NUMBER NOT NULL,
 	toAccountId NUMBER NOT NULL,
-	toBankName VARCHAR DEFAULT 'VUT-FIT-BANK', -- default our bank name
+	toBankId VARCHAR DEFAULT '007', -- default our bank name
 	assignClientId NUMBER NOT NULL,
 	executeWorkerId NUMBER NOT NULL,
+	approvedState BOOLEAN NOT NULL
 );
 
 
