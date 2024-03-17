@@ -1,4 +1,10 @@
--- DROP TABLES -- 
+-- IDS
+-- Druhy projekt
+-- Projekt 2. cast: SQL skript pro vytvoreni objektu schematu databaze
+-- Temata: c. 26 'Banka'
+-- Autori: Myron Kukhta(xkukht01), Artemii Pikulin(xpikul03)
+
+-- DROP TABLES -- TODO: CHECK DELETING NONEXISTED TABLES 
 DROP TABLE AccountStatementsTranscaction;
 DROP TABLE TransferTransaction;
 DROP TABLE WithdrawalTransaction;
@@ -190,21 +196,6 @@ ALTER TABLE Account ADD CONSTRAINT check_Account_currency CHECK (REGEXP_LIKE(cur
 
 -- kontrola formatu identifikace banku pro odchazejici transakce: [tri litery]-[tri cisla]
 ALTER TABLE TransferTransaction ADD CONSTRAINT check_TransferTransaction_toBankID CHECK (REGEXP_LIKE(toBankID, '[a-zA-Z]{3}-\d{3}$', 'i'));
-
-
-
--- ULOZENI DAT --
-INSERT INTO Client(ID_Client, firstName, secondName, email)
-VALUES (1, 'Myron', 'Kukhta', 'MyrKykhta@gmail.com');
-
-INSERT INTO AccountOwner(ID_AccountOwner, nationalID, telephonNumber, dateOfBirthday)
-VALUES(1, '210421/1111', '+420775485902', TO_DATE('2001-04-21', 'YYYY-MM-DD'));
-
-INSERT INTO Client(ID_Client, firstName, secondName, email)
-VALUES (2, 'Name', 'SecondName', 'MailTester@att.intel.com');
-
-INSERT INTO ExtendedUser(ID_ExtendedUser, personGivesAccess)
-VALUES (2, 1);
 
 
 
