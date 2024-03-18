@@ -197,5 +197,6 @@ ALTER TABLE Account ADD CONSTRAINT check_Account_currency CHECK (REGEXP_LIKE(cur
 -- kontrola formatu identifikace banku pro odchazejici transakce: [tri litery]-[tri cisla]
 ALTER TABLE TransferTransaction ADD CONSTRAINT check_TransferTransaction_toBankID CHECK (REGEXP_LIKE(toBankID, '[a-zA-Z]{3}-\d{3}$', 'i'));
 
-
+-- kontrola pseudo_boolean datoveho type
+ALTER TABLE BankTransaction ADD CONSTRAINT check_BankTransaction_approvedState CHECK (approvedState IN (0,1));
 
