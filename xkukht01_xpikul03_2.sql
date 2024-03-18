@@ -143,9 +143,6 @@ ALTER TABLE BankTransaction ADD CONSTRAINT FK_BankTransaction_assignClientId FOR
 -- vztah 'execute' mezi entitou 'Worker' a entitou 'Transaction'
 ALTER TABLE BankTransaction ADD	CONSTRAINT FK_BankTransaction_executeWorkerId FOREIGN KEY (executeWorkerId) REFERENCES Worker(ID_Worker) ON DELETE SET NULL;
 
--- TODO: are really need ???
--- ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_accountId FOREIGN KEY (clientId) REFERENCES Client(ID_Clinet);
-
 -- vztah generalizace mezi entitou 'Transaction' a 'WithdrawalTransaction'
 ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_ID_WithdrawalTransaction FOREIGN KEY (ID_WithdrawalTransaction) REFERENCES BankTransaction(ID_Transaction) ON DELETE CASCADE;
 
@@ -178,9 +175,6 @@ ALTER TABLE AccountOwner ADD CONSTRAINT check_AccountOwner_nationalID CHECK (REG
 
 -- kontrola formatu telephoniho cisla entity 'Owner' (povoleni jen cesky telefonni cicla): [neni nutno ulozit kod '+420' a neni nutny mezery][NNN NNN NNN]
 ALTER TABLE AccountOwner ADD CONSTRAINT check_AccountOwner_telephonNumber CHECK (REGEXP_LIKE(telephonNumber, '^(\+420)?\d{3}\d{3}\d{3}$'));
-
--- kontrola ze 'Owner' dospeli
---ALTER TABLE AccountOwner ADD CONSTRAINT check_AccountOwner_dateOfBirthday CHECK (MONTH_BETWEEN(SYSDATE, dateOfBirthday)/12 >= 18);
 
 -- kontrola formatu telephoniho cisla entity 'Worker' (stejne jak pro entitu 'Owner')
 ALTER TABLE Worker ADD CONSTRAINT check_Worker_workTelephonNumber CHECK (REGEXP_LIKE(workTelephonNumber, '^(\+420)?\d{3}\d{3}\d{3}$'));
