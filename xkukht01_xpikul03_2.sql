@@ -121,51 +121,51 @@ CREATE TABLE AccountStatementsTranscaction(
 	accountStatementId INT NOT NULL,
 	transactionId INT NOT NULL,
 	CONSTRAINT PK_AccountStatementsTranscaction PRIMARY KEY (accountStatementId, transactionId),
-	CONSTRAINT FK_AccountStateId FOREIGN KEY (accountStatementId) REFERENCES AccountStatement(ID_AccountStatement),
-	CONSTRAINT FK_TransactionId FOREIGN KEY (transactionId) REFERENCES BankTransaction(ID_Transaction)
+	CONSTRAINT FK_AccountStateId FOREIGN KEY (accountStatementId) REFERENCES AccountStatement(ID_AccountStatement) ON DELETE CASCADE,
+	CONSTRAINT FK_TransactionId FOREIGN KEY (transactionId) REFERENCES BankTransaction(ID_Transaction) ON DELETE CASCADE
 );
 
 -- vztah generalizace mezi entitou 'Client' a 'Owner'
-ALTER TABLE AccountOwner ADD CONSTRAINT FK_Owner_Client FOREIGN KEY (ID_AccountOwner) REFERENCES Client(ID_Client);
+ALTER TABLE AccountOwner ADD CONSTRAINT FK_Owner_Client FOREIGN KEY (ID_AccountOwner) REFERENCES Client(ID_Client) ON DELETE CASCADE;
 
 -- vztah generalizace mezi entitou 'Client' a 'ExtendedUser'
-ALTER TABLE ExtendedUser ADD CONSTRAINT FK_ExtendedUser_IDExtendedUser FOREIGN KEY (ID_ExtendedUser) REFERENCES Client(ID_Client);
+ALTER TABLE ExtendedUser ADD CONSTRAINT FK_ExtendedUser_IDExtendedUser FOREIGN KEY (ID_ExtendedUser) REFERENCES Client(ID_Client) ON DELETE CASCADE;
 
 -- vztah 'give access' mezi entitou 'Owner' a 'ExtendedUser'
-ALTER TABLE ExtendedUser ADD CONSTRAINT FK_ExtendedUser_PersonGivesAccess FOREIGN KEY (personGivesAccess) REFERENCES AccountOwner(ID_AccountOwner);
+ALTER TABLE ExtendedUser ADD CONSTRAINT FK_ExtendedUser_PersonGivesAccess FOREIGN KEY (personGivesAccess) REFERENCES AccountOwner(ID_AccountOwner) ON DELETE CASCADE;
 
 -- Popisuhe vztah 'own' mezi entitou 'Owner' a entitou 'Account' 
-ALTER TABLE Account ADD CONSTRAINT FK_AccountOwner FOREIGN KEY (accountOwner) REFERENCES AccountOwner(ID_AccountOwner);
+ALTER TABLE Account ADD CONSTRAINT FK_AccountOwner FOREIGN KEY (accountOwner) REFERENCES AccountOwner(ID_AccountOwner) ON DELETE CASCADE;
 
 -- vztah 'assign' mezi entitou 'Client' a entitou 'Transaction'
-ALTER TABLE BankTransaction ADD CONSTRAINT FK_BankTransaction_assignClientId FOREIGN KEY (assignClientId) REFERENCES Client(ID_Client);
+ALTER TABLE BankTransaction ADD CONSTRAINT FK_BankTransaction_assignClientId FOREIGN KEY (assignClientId) REFERENCES Client(ID_Client) ON DELETE SET NULL;
 
 -- vztah 'execute' mezi entitou 'Worker' a entitou 'Transaction'
-ALTER TABLE BankTransaction ADD	CONSTRAINT FK_BankTransaction_executeWorkerId FOREIGN KEY (executeWorkerId) REFERENCES Worker(ID_Worker);
+ALTER TABLE BankTransaction ADD	CONSTRAINT FK_BankTransaction_executeWorkerId FOREIGN KEY (executeWorkerId) REFERENCES Worker(ID_Worker) ON DELETE SET NULL;
 
 -- TODO: are really need ???
 -- ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_accountId FOREIGN KEY (clientId) REFERENCES Client(ID_Clinet);
 
 -- vztah generalizace mezi entitou 'Transaction' a 'WithdrawalTransaction'
-ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_ID_WithdrawalTransaction FOREIGN KEY (ID_WithdrawalTransaction) REFERENCES BankTransaction(ID_Transaction);
+ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_ID_WithdrawalTransaction FOREIGN KEY (ID_WithdrawalTransaction) REFERENCES BankTransaction(ID_Transaction) ON DELETE CASCADE;
 
 -- vztah generalizace mezi entitou 'Transaction' a 'DepositTransaction'
-ALTER TABLE DepositTransaction ADD CONSTRAINT FK_ID_DepositTransaction FOREIGN KEY (ID_DepositTransaction) REFERENCES BankTransaction(ID_Transaction);
+ALTER TABLE DepositTransaction ADD CONSTRAINT FK_ID_DepositTransaction FOREIGN KEY (ID_DepositTransaction) REFERENCES BankTransaction(ID_Transaction) ON DELETE CASCADE;
 
 -- vztah generalizace mezi entitou 'Transaction' a 'TransferTransaction'
-ALTER TABLE TransferTransaction ADD CONSTRAINT FK_ID_TransferTransaction FOREIGN KEY (ID_TransferTransaction) REFERENCES BankTransaction(ID_Transaction);
+ALTER TABLE TransferTransaction ADD CONSTRAINT FK_ID_TransferTransaction FOREIGN KEY (ID_TransferTransaction) REFERENCES BankTransaction(ID_Transaction) ON DELETE CASCADE;
 
 -- vztah 'transfer from' mezi entitou 'Account' a 'TransferTransaction'
-ALTER TABLE TransferTransaction ADD CONSTRAINT FK_TransferTransaction_transferFrom FOREIGN KEY (transferFrom) REFERENCES Account(ID_Account);
+ALTER TABLE TransferTransaction ADD CONSTRAINT FK_TransferTransaction_transferFrom FOREIGN KEY (transferFrom) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
 -- vztah 'transfer to' mezi entitou 'Account' a 'TransferTransaction'
-ALTER TABLE TransferTransaction ADD CONSTRAINT FK_TransferTransaction_transferTo FOREIGN KEY (transferTo) REFERENCES Account(ID_Account);
+ALTER TABLE TransferTransaction ADD CONSTRAINT FK_TransferTransaction_transferTo FOREIGN KEY (transferTo) REFERENCES Account(ID_Account) ON DELETE SET NULL;
 
 -- vztah 'withdrawal from' mezi entitou 'Account' a 'WithdrawalTransaction'
-ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_WithdrawalTransaction_withdrawalFrom FOREIGN KEY (withdrawalFrom) REFERENCES Account(ID_Account);
+ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_WithdrawalTransaction_withdrawalFrom FOREIGN KEY (withdrawalFrom) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
 -- vztah 'deposit to' mezi entitou 'Account' a 'DepositTransaction'
-ALTER TABLE DepositTransaction ADD CONSTRAINT FK_DepositTransaction_depositTo FOREIGN KEY (depositTo) REFERENCES Account(ID_Account);
+ALTER TABLE DepositTransaction ADD CONSTRAINT FK_DepositTransaction_depositTo FOREIGN KEY (depositTo) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
 
 -- KONTROLA --
