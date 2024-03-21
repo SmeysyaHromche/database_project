@@ -163,8 +163,10 @@ ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_WithdrawalTransaction_withdr
 -- vztah 'deposit to' mezi entitou 'Account' a 'DepositTransaction'
 ALTER TABLE DepositTransaction ADD CONSTRAINT FK_DepositTransaction_depositTo FOREIGN KEY (depositTo) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
+-- vztah 'about' mezi entitou 'Account' a 'AccountStatement'
 ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_accountId FOREIGN KEY (accountId) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
+-- vztah 'request' mezi entitou 'Owner' a 'AccountStatement'
 ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_requestedOwner FOREIGN KEY (requestedOwner) REFERENCES AccountOwner(ID_AccountOwner) ON DELETE SET NULL;
 
 
