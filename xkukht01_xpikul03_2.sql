@@ -73,7 +73,8 @@ CREATE TABLE AccountStatement(
 	accountId INT NOT NULL,
 	actualDate DATE NOT NULL,
 	fromDate DATE NOT NULL,
-	toDate DATE NOT NULL
+	toDate DATE NOT NULL,
+	requestedOwner INT NOT NULL
 );
 
 -- Tabulka 'BankTransaction'
@@ -162,6 +163,10 @@ ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_WithdrawalTransaction_withdr
 -- vztah 'deposit to' mezi entitou 'Account' a 'DepositTransaction'
 ALTER TABLE DepositTransaction ADD CONSTRAINT FK_DepositTransaction_depositTo FOREIGN KEY (depositTo) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
+ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_accountId FOREIGN KEY (accountId) REFERENCES Account(ID_Account) ON DELETE CASCADE;
+
+ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_requestedOwner FOREIGN KEY (requestedOwner) REFERENCES AccountOwner(ID_AccountOwner) ON DELETE SET NULL;
+
 
 -- KONTROLA --
 
@@ -241,8 +246,8 @@ VALUES  (200, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
 INSERT INTO TransferTransaction (ID_TransferTransaction, transferFrom, transferTo)
 VALUES(3, 1, 2);
 
-INSERT INTO AccountStatement (accountId, actualDate, fromDate, toDate)
-VALUES (1, TO_DATE('2024-12-12', 'YYYY-MM-DD'), TO_DATE('2019-03-21', 'YYYY-MM-DD'), TO_DATE('2024-12-12', 'YYYY-MM-DD'));
+INSERT INTO AccountStatement (accountId, actualDate, fromDate, toDate, requestedOwner)
+VALUES (1, TO_DATE('2024-12-12', 'YYYY-MM-DD'), TO_DATE('2019-03-21', 'YYYY-MM-DD'), TO_DATE('2024-12-12', 'YYYY-MM-DD'), 1);
 
 INSERT INTO AccountStatementsTranscaction (accountStatementId, transactionId)
 VALUES (1, 1);
