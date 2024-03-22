@@ -257,16 +257,3 @@ INSERT INTO AccountStatementsTranscaction (accountStatementId, transactionId)
 VALUES (1, 2);
 INSERT INTO AccountStatementsTranscaction (accountStatementId, transactionId)
 VALUES (1, 3);
-
--- TESTED SELECT BEFORE SENDING NEED DELETE
-SELECT * FROM Worker;
-SELECT * FROM Client;
-SELECT * FROM AccountOwner;
-SELECT * FROM Account;
-SELECT * FROM ExtendedUser;
-SELECT * FROM BankTransaction;
-SELECT * FROM DepositTransaction;
-SELECT * FROM WithdrawalTransaction;
-SELECT * FROM TransferTransaction;
-SELECT * FROM AccountStatement;
-SELECT * FROM AccountStatementsTranscaction;
