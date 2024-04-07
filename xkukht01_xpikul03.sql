@@ -259,52 +259,52 @@ INSERT INTO AccountStatementsTranscaction (accountStatementId, transactionId)
 VALUES (1, 3);
 
 
--- SELECTS --
+-- Dotazy --
 
--- #1 select 
--- with join two tables
--- Description: information about clients who have personal account
+-- #1 dotaz 
+-- spojeni dvou tabulek
+-- Popis: indormace oo klientu ktery maji osobni ucet
 SELECT c.firstName, c.secondName, c.email
 FROM Client c
 JOIN AccountOwner ao ON c.ID_Client = ao.ID_AccountOwner
 JOIN Account a ON ao.ID_AccountOwner = a.accountOwner;
 
--- #2 select
--- with join two tables
--- Description: all workers who execute the transactions
+-- #2 dotaz
+-- spojeni dvou tabulek
+-- Popis: vse pracovniky ktery potverdily tranzakce
 SELECT w.firstName, w.secondName
 FROM Worker w, BankTransaction t
 WHERE t.executeWorkerId = w.ID_Worker;
 
--- #3 select
--- with join three tables
--- Description: all clients whoes transactions was executed by worker with name 'Bob'
+-- #3 dotaz
+-- spojeni trech tabulek
+-- Popis: vse klienty tranzakce kterych provedl pracovnik 'Bob'
 SELECT c.firstName, c.secondName, t.ammount
 FROM Client c
 JOIN BankTransaction t ON c.ID_Client = t.assignClientId
 JOIN Worker w ON t.executeWorkerId = w.ID_Worker
 WHERE w.firstName = 'Bob';
 
--- #4 select
--- with 'group by' and agr function
--- Description: how many accounts have every account owner 
+-- #4 dotaz
+-- 'group by' a agrigacni funkce
+-- Popis: kolik uctu ma client ktery vlastni ucet 
 SELECT c.ID_Client, c.firstName, c.secondName, COUNT(a.ID_Account) as cnt_accounts
 FROM Client c
 JOIN AccountOwner ao ON c.ID_Client = ao.ID_AccountOwner
 JOIN Account a ON a.accountOwner = ao.ID_AccountOwner
 GROUP BY c.ID_Client, c.firstName, c.secondName;
 
--- #5 select
--- with 'gorup by' and agr function
--- Description: what is the amount of money
--- that was used in approved/nonapproved transactions   
+-- #5 dotaz
+-- 'group by' a agrigacni funkce
+-- Popis: kolik penez melo bylo vyuzito v 
+-- potverzenich a nepotverzenich tranzakcich   
 SELECT t.approvedState, SUM(t.ammount) as total_amount
 FROM BankTransaction t
 GROUP BY t.approvedState;
 
--- #6 select
--- with 'exists'
--- Description: all clients who make transaction 
+-- #6 dotaz
+-- 'exists'
+-- Popis: vse klienty ktery provedly tranzakce 
 SELECT c.firstName, c.secondName
 FROM Client c
 WHERE EXISTS (
@@ -313,9 +313,9 @@ WHERE EXISTS (
     WHERE t.assignClientId = c.ID_Client
 );
 
--- #7 select
--- with 'IN' and embedded 'select'
--- Descriptions: all clients who make nonaproved transactions
+-- #7 dotaz
+-- 'IN' a vestaveni dotaz
+-- Popis: vse klienty ktery povedly nepotverzene tranzakce
 SELECT c.firstName, c.secondName
 FROM Client c
 WHERE c.ID_Client IN (
