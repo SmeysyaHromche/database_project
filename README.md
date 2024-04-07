@@ -1,4 +1,5 @@
 # IDS
+## Description(CZ)
 university project for experience with DB
 
 Projekt č.: 26
@@ -13,3 +14,7 @@ Operace zahrnují vklad na účet, výběr z účtu a převod na jiný účet (t
 Systém musí ukládat informaci o všech operacích s účtem (kdo zadal, kdy, jaká operace a částka, kdo provedl).
 Se systémem vždy přímo komunikuje pouze pracovník banky.
 Systém musí také mimo jiné poskytovat výpis z účtu, který se posílá vlastníkovi, tj. výpis všech operací s účtem za dané období.
+
+## Score
+1) xkukht01_xpikul03_01.pdf (ERD design) -- 5/5;
+2) xkukht01_xpikul03_02.sql (Create db tables, add contraints and insert exmaples data) -- 5/5;
