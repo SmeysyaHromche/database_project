@@ -137,10 +137,10 @@ ALTER TABLE ExtendedUser ADD CONSTRAINT FK_ExtendedUser_PersonGivesAccess FOREIG
 ALTER TABLE Account ADD CONSTRAINT FK_AccountOwner FOREIGN KEY (accountOwner) REFERENCES AccountOwner(ID_AccountOwner) ON DELETE CASCADE;
 
 -- vztah 'assign' mezi entitou 'Client' a entitou 'Transaction'
-ALTER TABLE BankTransaction ADD CONSTRAINT FK_BankTransaction_assignClientId FOREIGN KEY (assignClientId) REFERENCES Client(ID_Client) ON DELETE SET NULL;
+ALTER TABLE BankTransaction ADD CONSTRAINT FK_BankTransaction_assignClientId FOREIGN KEY (assignClientId) REFERENCES Client(ID_Client) ON DELETE CASCADE;
 
 -- vztah 'execute' mezi entitou 'Worker' a entitou 'Transaction'
-ALTER TABLE BankTransaction ADD	CONSTRAINT FK_BankTransaction_executeWorkerId FOREIGN KEY (executeWorkerId) REFERENCES Worker(ID_Worker) ON DELETE SET NULL;
+ALTER TABLE BankTransaction ADD	CONSTRAINT FK_BankTransaction_executeWorkerId FOREIGN KEY (executeWorkerId) REFERENCES Worker(ID_Worker) ON DELETE CASCADE;
 
 -- vztah generalizace mezi entitou 'Transaction' a 'WithdrawalTransaction'
 ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_ID_WithdrawalTransaction FOREIGN KEY (ID_WithdrawalTransaction) REFERENCES BankTransaction(ID_Transaction) ON DELETE CASCADE;
@@ -155,7 +155,7 @@ ALTER TABLE TransferTransaction ADD CONSTRAINT FK_ID_TransferTransaction FOREIGN
 ALTER TABLE TransferTransaction ADD CONSTRAINT FK_TransferTransaction_transferFrom FOREIGN KEY (transferFrom) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
 -- vztah 'transfer to' mezi entitou 'Account' a 'TransferTransaction'
-ALTER TABLE TransferTransaction ADD CONSTRAINT FK_TransferTransaction_transferTo FOREIGN KEY (transferTo) REFERENCES Account(ID_Account) ON DELETE SET NULL;
+ALTER TABLE TransferTransaction ADD CONSTRAINT FK_TransferTransaction_transferTo FOREIGN KEY (transferTo) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
 -- vztah 'withdrawal from' mezi entitou 'Account' a 'WithdrawalTransaction'
 ALTER TABLE WithdrawalTransaction ADD CONSTRAINT FK_WithdrawalTransaction_withdrawalFrom FOREIGN KEY (withdrawalFrom) REFERENCES Account(ID_Account) ON DELETE CASCADE;
@@ -167,7 +167,7 @@ ALTER TABLE DepositTransaction ADD CONSTRAINT FK_DepositTransaction_depositTo FO
 ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_accountId FOREIGN KEY (accountId) REFERENCES Account(ID_Account) ON DELETE CASCADE;
 
 -- vztah 'request' mezi entitou 'Owner' a 'AccountStatement'
-ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_requestedOwner FOREIGN KEY (requestedOwner) REFERENCES AccountOwner(ID_AccountOwner) ON DELETE SET NULL;
+ALTER TABLE AccountStatement ADD CONSTRAINT FK_AccountStatement_requestedOwner FOREIGN KEY (requestedOwner) REFERENCES AccountOwner(ID_AccountOwner) ON DELETE CASCADE;
 
 
 -- KONTROLA --
@@ -258,68 +258,86 @@ VALUES (1, 2);
 INSERT INTO AccountStatementsTranscaction (accountStatementId, transactionId)
 VALUES (1, 3);
 
+-- ADVENCED OBJECTS --
 
--- Dotazy --
+-- TRIGGERS --
 
--- #1 dotaz 
--- spojeni dvou tabulek
--- Popis: indormace oo klientu ktery maji osobni ucet
-SELECT c.firstName, c.secondName, c.email
-FROM Client c
-JOIN AccountOwner ao ON c.ID_Client = ao.ID_AccountOwner
-JOIN Account a ON ao.ID_AccountOwner = a.accountOwner;
+CREATE OR REPLACE TRIGGER check_transfer
+BEFORE INSERT ON TransferTransaction
+FOR EACH ROW
+DECLARE
+	fromCurrency VARCHAR(3)
+	toCurrency VARCHAR(3)
+	act_amount NUMBER
+BEGIN
+	IF :NEW.toBankID = 'XXX-007' THEN
+		SELECT currency IN fromCurrency FROM BankTransaction WHERE :NEW.transferFrom = ID_Transaction;
+		SELECT currency IN toCurrency FROM BankTransaction WHERE :NEW.transferTo = ID_Transaction;
+		IF fromCurrency <> toCurrency THEN
+			RAISE_APPLICATION_ERROR(-20001, 'Warning! Transaction only between account with the same currency.');
+	END IF;
+	
+	-- CHECK LIMIT
 
--- #2 dotaz
--- spojeni dvou tabulek
--- Popis: vse pracovniky ktery potverdily tranzakce
-SELECT w.firstName, w.secondName
-FROM Worker w, BankTransaction t
-WHERE t.executeWorkerId = w.ID_Worker;
+END;
 
--- #3 dotaz
--- spojeni trech tabulek
--- Popis: vse klienty tranzakce kterych provedl pracovnik 'Bob'
-SELECT c.firstName, c.secondName, t.ammount
-FROM Client c
-JOIN BankTransaction t ON c.ID_Client = t.assignClientId
-JOIN Worker w ON t.executeWorkerId = w.ID_Worker
-WHERE w.firstName = 'Bob';
+CREATE OR REPLACE TRIGGER ammount_transfer
+AFTER INSERT ON TransferTransaction
+FOR EACH ROW
+DECLARE
+	tr_ammount NUMBER
+BEGIN
+	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction
+	UPDATE Account SET balance = balance + tr_ammount
+	IF :NEW.toBankID = 'XXX-007' THEN
+		UPDATE Account SET balance = balance + tr_ammount
+	END IF;
+END;
 
--- #4 dotaz
--- 'group by' a agrigacni funkce
--- Popis: kolik uctu ma client ktery vlastni ucet 
-SELECT c.ID_Client, c.firstName, c.secondName, COUNT(a.ID_Account) as cnt_accounts
-FROM Client c
-JOIN AccountOwner ao ON c.ID_Client = ao.ID_AccountOwner
-JOIN Account a ON a.accountOwner = ao.ID_AccountOwner
-GROUP BY c.ID_Client, c.firstName, c.secondName;
+'''
+check client ???
+'''
+CREATE OR REPLACE TRIGGER check_withdrawal
+BEFORE INSERT ON TransferTransaction
+FOR EACH ROW
+DECLARE
+	fromCurrency VARCHAR(3)
+	toCurrency VARCHAR(3)
+	act_amount NUMBER
+BEGIN
+	IF :NEW.toBankID = 'XXX-007' THEN
+		SELECT currency IN fromCurrency FROM BankTransaction WHERE :NEW.transferFrom = ID_Transaction;
+		SELECT currency IN toCurrency FROM BankTransaction WHERE :NEW.transferTo = ID_Transaction;
+		IF fromCurrency <> toCurrency THEN
+			RAISE_APPLICATION_ERROR(-20001, 'Warning! Transaction only between account with the same currency.');
+	END IF;
+	
+	-- CHECK LIMIT
 
--- #5 dotaz
--- 'group by' a agrigacni funkce
--- Popis: kolik penez melo bylo vyuzito v 
--- potverzenich a nepotverzenich tranzakcich   
-SELECT t.approvedState, SUM(t.ammount) as total_amount
-FROM BankTransaction t
-GROUP BY t.approvedState;
+END;
 
--- #6 dotaz
--- 'exists'
--- Popis: vse klienty ktery provedly tranzakce 
-SELECT c.firstName, c.secondName
-FROM Client c
-WHERE EXISTS (
-    SELECT 1
-    FROM BankTransaction t
-    WHERE t.assignClientId = c.ID_Client
-);
+CREATE OR REPLACE TRIGGER ammount_transfer
+AFTER INSERT ON TransferTransaction
+FOR EACH ROW
+DECLARE
+	tr_ammount NUMBER
+BEGIN
+	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction
+	UPDATE Account SET balance = balance + tr_ammount
+	IF :NEW.toBankID = 'XXX-007' THEN
+		UPDATE Account SET balance = balance + tr_ammount
+	END IF;
+END;
 
--- #7 dotaz
--- 'IN' a vestaveni dotaz
--- Popis: vse klienty ktery povedly nepotverzene tranzakce
-SELECT c.firstName, c.secondName
-FROM Client c
-WHERE c.ID_Client IN (
-    SELECT t.assignClientId
-    FROM BankTransaction t
-    WHERE t.approvedState = 0
-)
+
+CREATE OR REPLACE TRIGGER delete_extended_client
+	AFTER DELETE ON ExtendedUser
+	FOR EACH ROW
+BEGIN
+	DELETE FROM Client WHERE Clinet.ID_Client = :OLD.ID_ExtendedUser
+END;
+
+
+
+-- PROCEDURE --
+-- CHECK DAY LIMIT FOR OUTGOUNT
