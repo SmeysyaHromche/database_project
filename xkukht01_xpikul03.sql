@@ -445,5 +445,70 @@ SELECT * FROM BankTransaction;
 SELECT * FROM DepositTransaction;
 SELECT * FROM WithdrawalTransaction;
 SELECT * FROM TransferTransaction;
+
 -- PROCEDURE --
--- CHECK DAY LIMIT FOR OUTGOUNT
+-- VYTVARENI NOVEHO ACCOUNTOWNER --
+CREATE OR REPLACE PROCEDURE create_new_owner(
+	newFirstName IN Client.firstName%TYPE,
+	newSecondName IN CLIENT.secondName%TYPE,
+	newEmail IN CLIENT.secondName%TYPE,
+	newNationalID IN AccountOwner.nationalID%TYPE,
+	newTelephonNumber IN AccountOwner.telephonNumber%TYPE,
+	newDateOfBirthday  IN AccountOwner.dateOfBirthday%TYPE) AS
+	newID AccountOwner.ID_AccountOwner%TYPE;
+BEGIN
+	SELECT MAX(ID_Client) INTO newID FROM Client;
+	IF newID IS NULL THEN
+		newID := 0;
+	ELSE
+		newID := newID + 1;
+	END IF;
+	INSERT INTO Client (ID_Client, firstName, secondName, email)
+	VALUES (newID, newFirstName, newSecondName, newEmail);
+	INSERT INTO AccountOwner (ID_AccountOwner, nationalID, telephonNumber, dateOfBirthday)
+	VALUES (newID, newNationalID, newTelephonNumber, newDateOfBirthday);
+END;
+/
+
+-- VYTVARENI NOVEHO EXTENDEDUSER --
+CREATE OR REPLACE PROCEDURE create_new_extenderd(
+	newFirstName IN Client.firstName%TYPE,
+	newSecondName IN Client.secondName%TYPE,
+	newEmail IN Client.secondName%TYPE,
+	newPersonGivesAccess IN ExtendedUser.personGivesAccess%TYPE) AS
+	checkPersonGiveAccess INT;
+	newID ExtendedUser.ID_ExtendedUser%TYPE;
+BEGIN
+	SELECT COUNT(*) INTO checkPersonGiveAccess FROM AccountOwner WHERE ID_AccountOwner = newPersonGivesAccess;
+	IF checkPersonGiveAccess = 0 THEN
+		RAISE_APPLICATION_ERROR(-20004, 'Warning! Account owner for new extended user is not valid.');
+	END IF;
+	SELECT MAX(ID_Client) INTO newID FROM Client;
+	IF newID IS NULL THEN
+		newID := 0;
+	ELSE
+		newID := newID + 1;
+	END IF;
+
+	INSERT INTO Client (ID_Client, firstName, secondName, email)
+	VALUES (newID, newFirstName, newSecondName, newEmail);
+	INSERT INTO ExtendedUser(ID_ExtendedUser, personGivesAccess)
+	VALUES (newID, newPersonGivesAccess);
+END;
+/
+
+-- test vytvareni noveho ACCOUNTOWNER --
+BEGIN
+	create_new_owner('Jack', 'Nicholson', 'JackNicholson@gmail.com', '123456/7891','+420777777777', TO_DATE('1937-04-22', 'YYYY-MM-DD'));
+END;
+/
+-- test vytvareni noveho EXTENDEDUSER --
+BEGIN
+	create_new_owner('Morgan', 'Freeman', 'MorganFreeman@gmail.com', '123457/7892','+420777777778', TO_DATE('1937-06-01', 'YYYY-MM-DD'));
+END;
+/
+
+SELECT * FROM Client;
+SELECT * FROM AccountOwner;
+SELECT * FROM ExtendedUser;
+-- test vytvareni noveho EXTENDEDUSER --
