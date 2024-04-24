@@ -225,38 +225,26 @@ VALUES ('Mary', 'Snow', 'YesIAmMarry@gmail.com');
 INSERT INTO ExtendedUser (ID_ExtendedUser, personGivesAccess) 
 VALUES (2, 1);
 
-INSERT INTO BankTransaction (ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
-VALUES  (1000000, TO_DATE('2024-03-20', 'YYYY-MM-DD'), 1, 1, 1);
-INSERT INTO DepositTransaction (ID_DepositTransaction, depositTo) 
-VALUES(1, 1);
-
-INSERT INTO BankTransaction (ammount, transactionDate, assignClientId, executeWorkerId, approvedState) 
-VALUES  (200001, TO_DATE('2024-03-21', 'YYYY-MM-DD'), 2, 2, 0);
-INSERT INTO WithdrawalTransaction (ID_WithdrawalTransaction, withdrawalFrom) 
-VALUES(2, 1);
-
 INSERT INTO Client (firstName, secondName, email)
 VALUES ('Abraham', 'Linkoln', 'LinkolnAndItNotACar@intel.att.com');
 INSERT INTO AccountOwner (ID_AccountOwner, nationalID, telephonNumber, dateOfBirthday)
 VALUES (3, '770211/9999', '444444444', TO_DATE('2024-07-01', 'YYYY-MM-DD'));
 INSERT INTO Account (dayLimit, secretNumber, accountOwner, balance, currency)
 VALUES (0.5, '1', 3, 100, 'EUR');
+INSERT INTO Client (firstName, secondName, email)
+VALUES ('Jo', 'Washington', 'JW@gmail.com');
+INSERT INTO ExtendedUser (ID_ExtendedUser, personGivesAccess) 
+VALUES (4, 3);
 
 
-INSERT INTO BankTransaction (ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
-VALUES  (200, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
-INSERT INTO TransferTransaction (ID_TransferTransaction, transferFrom, transferTo)
-VALUES(3, 1, 2);
 
-INSERT INTO AccountStatement (accountId, actualDate, fromDate, toDate, requestedOwner)
-VALUES (1, TO_DATE('2024-12-12', 'YYYY-MM-DD'), TO_DATE('2019-03-21', 'YYYY-MM-DD'), TO_DATE('2024-12-12', 'YYYY-MM-DD'), 1);
+INSERT INTO Client (firstName, secondName, email)
+VALUES ('Myron', 'Kukhta', 'MyMail@gmail.com');
+INSERT INTO AccountOwner (ID_AccountOwner, nationalID, telephonNumber, dateOfBirthday)
+VALUES (4, '111111/1111', '123456789', TO_DATE('2002-04-21', 'YYYY-MM-DD'));
+INSERT INTO Account (dayLimit, secretNumber, accountOwner, currency, balance)
+VALUES (10000, '9999', 4, 'USD', 1000);
 
-INSERT INTO AccountStatementsTranscaction (accountStatementId, transactionId)
-VALUES (1, 1);
-INSERT INTO AccountStatementsTranscaction (accountStatementId, transactionId)
-VALUES (1, 2);
-INSERT INTO AccountStatementsTranscaction (accountStatementId, transactionId)
-VALUES (1, 3);
 
 -- ADVENCED OBJECTS --
 
@@ -273,7 +261,7 @@ DECLARE
 BEGIN
 	SELECT ammount INTO tr_ammount FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
 	SELECT balance INTO old_balance FROM Account WHERE :NEW.withdrawalFrom = ID_Account;
-	IF old_balance <= tr_ammount THEN
+	IF old_balance < tr_ammount THEN
 		DELETE FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
 		RAISE_APPLICATION_ERROR(-20001, 'Warning! There are not enough funds in the account to complete the transaction');
 	END IF;
@@ -317,16 +305,21 @@ DECLARE
 	old_balance NUMBER;
 BEGIN
 	IF :NEW.toBankID = 'XXX-007' THEN
+			IF :NEW.transferFrom = :NEW.transferTo THEN			
+				--DELETE FROM BankTransaction WHERE ID_Transaction = :NEW.ID_TransferTransaction;
+				RAISE_APPLICATION_ERROR(-20002, 'Warning! In the transfer accounts should be not the same.');
+			END IF;
 			SELECT currency INTO fromCurrency FROM Account WHERE :NEW.transferFrom = ID_Account;
 			SELECT currency INTO toCurrency FROM Account WHERE :NEW.transferTo = ID_Account;
-			IF fromCurrency <> toCurrency THEN
-				RAISE_APPLICATION_ERROR(-20002, 'Warning! Transaction only between account with the same currency.');
+			IF fromCurrency <> toCurrency THEN			
+				--DELETE FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
+				RAISE_APPLICATION_ERROR(-20003, 'Warning! Transaction only between account with the same currency.');
 			END IF;
 	END IF;
 	SELECT ammount INTO tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
 	SELECT balance INTO old_balance FROM Account WHERE :NEW.transferFrom = ID_Account;
-	IF old_balance <= tr_ammount THEN
-		DELETE FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
+	IF old_balance < tr_ammount THEN
+		--DELETE FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
 		RAISE_APPLICATION_ERROR(-20001, 'Warning! There are not enough funds in the account to complete the transaction');
 	END IF;
 END;
@@ -341,47 +334,116 @@ DECLARE
 BEGIN
 	SELECT ammount INTO tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
 	UPDATE Account SET balance = balance - tr_ammount WHERE ID_Account = :NEW.transferFrom;
-	UPDATE Account SET balance = balance + tr_ammount WHERE ID_Account = :NEW.transferTo;
+	IF :NEW.toBankID = 'XXX-007' THEN
+		UPDATE Account SET balance = balance + tr_ammount WHERE ID_Account = :NEW.transferTo;
+	END IF;
 END;
 /
 
 -- vymaze soucast informace EXTENDED_USER z tabulku CLIENT po vymazeni EXTENDED_USER
-CREATE OR REPLACE TRIGGER delete_extended_client
-	AFTER DELETE ON ExtendedUser
-	FOR EACH ROW
-BEGIN
-	DELETE FROM Client WHERE ID_Client = :OLD.ID_ExtendedUser;
-END;
-/
+--CREATE OR REPLACE TRIGGER delete_extended_client
+--	AFTER DELETE ON ExtendedUser
+--	FOR EACH ROW
+--BEGIN
+--	DELETE FROM Client WHERE ID_Client = :OLD.ID_ExtendedUser;
+--END;
+--/
 
 
 -- vymaze soucast informace WITHDRAWAL z tabulku BANKTRANSACTION po vymazeni WITHDRAWAL
-CREATE OR REPLACE TRIGGER delete_withdrawal
-	AFTER DELETE ON WithdrawalTransaction
-	FOR EACH ROW
-BEGIN
-	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_WithdrawalTransaction;
-END;
-/
+--CREATE OR REPLACE TRIGGER delete_withdrawal
+--	AFTER DELETE ON WithdrawalTransaction
+--	FOR EACH ROW
+--BEGIN
+--	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_WithdrawalTransaction;
+--END;
+--/
 
 
 -- vymaze soucast informace DEPOSIT z tabulku BANKTRANSACTION po vymazeni DEPOSIT
-CREATE OR REPLACE TRIGGER delete_deposit
-	AFTER DELETE ON DepositTransaction
-	FOR EACH ROW
-BEGIN
-	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_DepositTransaction;
-END;
-/
+--CREATE OR REPLACE TRIGGER delete_deposit
+--	AFTER DELETE ON DepositTransaction
+--	FOR EACH ROW
+--BEGIN
+--	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_DepositTransaction;
+--END;
+--/
 
 
 -- vymaze soucast informace TRANSFER z tabulku BANKTRANSACTION po vymazeni TRANSFER
-CREATE OR REPLACE TRIGGER delete_transfer
-	AFTER DELETE ON TransferTransaction
-	FOR EACH ROW
-BEGIN
-	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_TransferTransaction;
-END;
-/
+--CREATE OR REPLACE TRIGGER delete_transfer
+--	AFTER DELETE ON TransferTransaction
+--	FOR EACH ROW
+--BEGIN
+--	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_TransferTransaction;
+--END;
+--/
+
+-- EXAMPLES USING TRIGGER
+
+-- test new deposit
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (1, 1, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 4, 2, 1);
+INSERT INTO DepositTransaction (ID_DepositTransaction, depositTo)
+VALUES(1, 3);
+
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (2, 200, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
+INSERT INTO DepositTransaction (ID_DepositTransaction, depositTo)
+VALUES(2, 1);
+
+-- test bad transfer with the same accounts
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (3, 10000000000000, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
+INSERT INTO TransferTransaction (ID_TransferTransaction, transferFrom, transferTo)
+VALUES(3, 2, 2);
+DELETE FROM BankTransaction WHERE ID_Transaction = 3;
+
+
+-- test bad transfer with the same accounts
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (3, 10000000000000, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
+INSERT INTO TransferTransaction (ID_TransferTransaction, transferFrom, transferTo)
+VALUES(3, 2, 2);
+DELETE FROM BankTransaction WHERE ID_Transaction = 3;
+
+-- test bad transfer with currency
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (3, 100, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 4, 2, 1);
+INSERT INTO TransferTransaction (ID_TransferTransaction, transferFrom, transferTo)
+VALUES(3, 3, 1);
+DELETE FROM BankTransaction WHERE ID_Transaction = 3;
+
+--test bad transfer with ammount
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (3, 10000000, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
+INSERT INTO TransferTransaction (ID_TransferTransaction, transferFrom, transferTo)
+VALUES(3, 1, 2);
+DELETE FROM BankTransaction WHERE ID_Transaction = 3;
+
+-- test correct transfer
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (3, 10, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
+INSERT INTO TransferTransaction (ID_TransferTransaction, transferFrom, transferTo)
+VALUES(3, 1, 2);
+
+-- test incorrect withdrawal
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (4, 1000000000, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 4, 2, 1);
+INSERT INTO WithdrawalTransaction (ID_WithdrawalTransaction, withdrawalFrom)
+VALUES(4, 3);
+DELETE FROM BankTransaction WHERE ID_Transaction = 4;
+
+-- test correct withdrawal
+INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+VALUES  (4, 1, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 4, 2, 1);
+INSERT INTO WithdrawalTransaction (ID_WithdrawalTransaction, withdrawalFrom)
+VALUES(4, 3);
+
+SELECT * FROM Account;
+SELECT * FROM BankTransaction;
+SELECT * FROM DepositTransaction;
+SELECT * FROM WithdrawalTransaction;
+SELECT * FROM TransferTransaction;
 -- PROCEDURE --
 -- CHECK DAY LIMIT FOR OUTGOUNT
