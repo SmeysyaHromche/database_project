@@ -260,73 +260,82 @@ VALUES (1, 3);
 
 -- ADVENCED OBJECTS --
 
+
 -- TRIGGERS --
 
+-- FOR WITHDRAWAL --
+CREATE OR REPLACE TRIGGER check_withdrawal
+BEFORE INSERT ON WithdrawalTransaction
+FOR EACH ROW
+DECLARE
+	tr_ammount NUMBER;
+	old_balance NUMBER;
+BEGIN
+	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
+	SELECT balance IN old_balance FROM Account WHERE :NEW.withdrawalFrom = ID_Account;
+	IF balance <= ammount THEN
+		DELETE FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
+		RAISE_APPLICATION_ERROR(-20001, 'Warning! There are not enough funds in the account to complete the transaction');
+	END IF;
+END;
+
+CREATE OR REPLACE TRIGGER do_withdrawal
+AFTER INSERT ON WithdrawalTransaction
+FOR EACH ROW
+DECLARE
+	tr_ammount NUMBER;
+	old_balance NUMBER;
+BEGIN
+	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
+	UPDATE ID_Account SET balance = balance - tr_ammount WHERE ID_Account = :NEW.withdrawalFrom;
+END;
+
+-- FOR DEPOSITE --
+CREATE OR REPLACE TRIGGER do_deposite
+AFTER INSERT ON DepositTransaction
+FOR EACH ROW
+DECLARE
+	tr_ammount NUMBER;
+BEGIN
+	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_DepositTransaction = ID_Transaction;
+	UPDATE Account SET balance = balance + tr_ammount WHERE ID_Account = :NEW.depositTo;
+END;
+
+-- FOR TRANSFER
 CREATE OR REPLACE TRIGGER check_transfer
 BEFORE INSERT ON TransferTransaction
 FOR EACH ROW
 DECLARE
-	fromCurrency VARCHAR(3)
-	toCurrency VARCHAR(3)
-	act_amount NUMBER
+	fromCurrency VARCHAR(3);
+	toCurrency VARCHAR(3);
+	tr_ammount NUMBER;
+	from_balance NUMBER;
+	old_balance NUMBER;
 BEGIN
 	IF :NEW.toBankID = 'XXX-007' THEN
-		SELECT currency IN fromCurrency FROM BankTransaction WHERE :NEW.transferFrom = ID_Transaction;
-		SELECT currency IN toCurrency FROM BankTransaction WHERE :NEW.transferTo = ID_Transaction;
-		IF fromCurrency <> toCurrency THEN
-			RAISE_APPLICATION_ERROR(-20001, 'Warning! Transaction only between account with the same currency.');
+			SELECT currency IN fromCurrency FROM BankTransaction WHERE :NEW.transferFrom = ID_Transaction;
+			SELECT currency IN toCurrency FROM BankTransaction WHERE :NEW.transferTo = ID_Transaction;
+			IF fromCurrency <> toCurrency THEN
+				RAISE_APPLICATION_ERROR(-20002, 'Warning! Transaction only between account with the same currency.');
+	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
+	SELECT balance IN old_balance FROM Account WHERE :NEW.withdrawalFrom = ID_Account;
+	IF old_balance <= ammount THEN
+		DELETE FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
+		RAISE_APPLICATION_ERROR(-20001, 'Warning! There are not enough funds in the account to complete the transaction');
 	END IF;
-	
-	-- CHECK LIMIT
-
 END;
 
-CREATE OR REPLACE TRIGGER ammount_transfer
+CREATE OR REPLACE TRIGGER do_transfer
 AFTER INSERT ON TransferTransaction
 FOR EACH ROW
 DECLARE
-	tr_ammount NUMBER
+	tr_ammount NUMBER;
+	old_balance NUMBER;
 BEGIN
-	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction
-	UPDATE Account SET balance = balance + tr_ammount
-	IF :NEW.toBankID = 'XXX-007' THEN
-		UPDATE Account SET balance = balance + tr_ammount
-	END IF;
-END;
-
-'''
-check client ???
-'''
-CREATE OR REPLACE TRIGGER check_withdrawal
-BEFORE INSERT ON TransferTransaction
-FOR EACH ROW
-DECLARE
-	fromCurrency VARCHAR(3)
-	toCurrency VARCHAR(3)
-	act_amount NUMBER
-BEGIN
-	IF :NEW.toBankID = 'XXX-007' THEN
-		SELECT currency IN fromCurrency FROM BankTransaction WHERE :NEW.transferFrom = ID_Transaction;
-		SELECT currency IN toCurrency FROM BankTransaction WHERE :NEW.transferTo = ID_Transaction;
-		IF fromCurrency <> toCurrency THEN
-			RAISE_APPLICATION_ERROR(-20001, 'Warning! Transaction only between account with the same currency.');
-	END IF;
-	
-	-- CHECK LIMIT
-
-END;
-
-CREATE OR REPLACE TRIGGER ammount_transfer
-AFTER INSERT ON TransferTransaction
-FOR EACH ROW
-DECLARE
-	tr_ammount NUMBER
-BEGIN
-	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction
-	UPDATE Account SET balance = balance + tr_ammount
-	IF :NEW.toBankID = 'XXX-007' THEN
-		UPDATE Account SET balance = balance + tr_ammount
-	END IF;
+	SELECT ammount IN tr_ammount FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
+	SELECT balance IN old_balance FROM Account WHERE :NEW.withdrawalFrom = ID_Account;
+	UPDATE BankTransaction SET balance = old_balance - tr_ammount WHERE ID_Account = :NEW.transferFrom;
+	UPDATE BankTransaction SET balance = old_balance + tr_ammount WHERE ID_Account = :NEW.transferTo;
 END;
 
 
@@ -334,10 +343,30 @@ CREATE OR REPLACE TRIGGER delete_extended_client
 	AFTER DELETE ON ExtendedUser
 	FOR EACH ROW
 BEGIN
-	DELETE FROM Client WHERE Clinet.ID_Client = :OLD.ID_ExtendedUser
+	DELETE FROM Client WHERE ID_Client = :OLD.ID_ExtendedUser;
+END;
+
+CREATE OR REPLACE TRIGGER delete_withdrawal
+	AFTER DELETE ON WithdrawalTransaction
+	FOR EACH ROW
+BEGIN
+	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_WithdrawalTransaction;
 END;
 
 
+CREATE OR REPLACE TRIGGER delete_deposit
+	AFTER DELETE ON DepositTransaction
+	FOR EACH ROW
+BEGIN
+	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_DepositTransaction;
+END;
+
+CREATE OR REPLACE TRIGGER delete_transfer
+	AFTER DELETE ON TransferTransaction
+	FOR EACH ROW
+BEGIN
+	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_TransferTransaction;
+END;
 
 -- PROCEDURE --
 -- CHECK DAY LIMIT FOR OUTGOUNT
