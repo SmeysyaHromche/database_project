@@ -446,6 +446,23 @@ SELECT * FROM DepositTransaction;
 SELECT * FROM WithdrawalTransaction;
 SELECT * FROM TransferTransaction;
 
+-- FUNCTION --
+
+CREATE FUNCTION check_clients_access_right(
+	id_client NUMBER,
+	id_account NUMBER)
+RETURN INT
+IS ret NUMBER;
+BEGIN
+	SELECT COUNT(*) INTO ret FROM AccountOwner, Account WHERE id_client = AccountOwner.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner;
+	IF ret = 0 THEN
+		SELECT COUNT(*) INTO ret FROM AccountOwner, Account, ExtendedUser WHERE id_client = ExtendedUser.ID_ExtendedUser AND ExtendedUser.personGivesAccess = Account.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner;
+	END IF;
+	return (ret);
+END;
+/
+
+	
 -- PROCEDURE --
 -- VYTVARENI NOVEHO ACCOUNTOWNER --
 CREATE OR REPLACE PROCEDURE create_new_owner(
@@ -496,6 +513,101 @@ BEGIN
 	VALUES (newID, newPersonGivesAccess);
 END;
 /
+-- VYTVARENI NOVE DEPOSITTRANSACTION --
+CREATE OR REPLACE PROCEDURE create_new_deposit(
+	newAmmount IN BankTransaction.ammount%TYPE,
+	newTransactionDate IN BankTransaction.transactionDate%TYPE,
+	newAssignClientId IN BankTransaction.assignClientId%TYPE,
+	newExecuteWorkerId IN BankTransaction.executeWorkerId%TYPE,
+    newApprovedState IN BankTransaction.approvedState%TYPE
+	newDepositTo IN DepositTransaction.depositTo%TYPE) AS
+	newID ExtendedUser.ID_ExtendedUser%TYPE;
+	check_access NUMBER;
+BEGIN
+	check_access := check_clients_access_right(newAssignClientId, newDepositTo);
+	IF check_access = 0 THEN
+		RAISE_APPLICATION_ERROR(-20005, 'Warning! Client doesnt have access to account');
+	END IF;
+	SELECT MAX(ID_Transaction) INTO newID FROM BankTransaction;
+	IF newID IS NULL THEN
+		newID := 0;
+	ELSE
+		newID := newID + 1;
+	END IF;
+
+	INSERT INTO BankTransaction (ID_Client, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+	VALUES (newID, newAmmount, newTransactionDate, newAssignClientId, newExecuteWorkerId, newApprovedState);
+	INSERT INTO DepositTransaction(ID_DepositTransaction, depositTo)
+	VALUES (newID, newDepositTo);
+END;
+/
+-- VYTVARENI NOVE WITHDRAWALTRANSACTION --
+CREATE OR REPLACE PROCEDURE create_new_withdrawal(
+	newAmmount IN BankTransaction.ammount%TYPE,
+	newTransactionDate IN BankTransaction.transactionDate%TYPE,
+	newAssignClientId IN BankTransaction.assignClientId%TYPE,
+	newExecuteWorkerId IN BankTransaction.executeWorkerId%TYPE,
+    newApprovedState IN BankTransaction.approvedState%TYPE
+	newWithdrawalFrom IN WithdrawalTransaction.withdrawalFrom%TYPE) AS
+	newID ExtendedUser.ID_ExtendedUser%TYPE;
+	check_access NUMBER;
+BEGIN
+	check_access := check_clients_access_right(newAssignClientId, newWithdrawalFrom);
+	IF check_access = 0 THEN
+		RAISE_APPLICATION_ERROR(-20005, 'Warning! Client doesnt have access to account');
+	END IF;
+	SELECT COUNT(*) INTO checkPersonGiveAccess FROM AccountOwner WHERE ID_AccountOwner = newPersonGivesAccess;
+	IF checkPersonGiveAccess = 0 THEN
+		RAISE_APPLICATION_ERROR(-20004, 'Warning! Account owner for new extended user is not valid.');
+	END IF;
+	SELECT MAX(ID_Client) INTO newID FROM Client;
+	IF newID IS NULL THEN
+		newID := 0;
+	ELSE
+		newID := newID + 1;
+	END IF;
+
+	INSERT INTO Client (ID_Client, firstName, secondName, email)
+	VALUES (newID, newFirstName, newSecondName, newEmail);
+	INSERT INTO ExtendedUser(ID_ExtendedUser, personGivesAccess)
+	VALUES (newID, newPersonGivesAccess);
+END;
+/
+-- VYTVARENI NOVE TRANSFERTRANSACTION --
+CREATE OR REPLACE PROCEDURE create_new_transfer(
+	newAmmount IN BankTransaction.ammount%TYPE,
+	newTransactionDate IN BankTransaction.transactionDate%TYPE,
+	newAssignClientId IN BankTransaction.assignClientId%TYPE,
+	newExecuteWorkerId IN BankTransaction.executeWorkerId%TYPE,
+    newApprovedState IN BankTransaction.approvedState%TYPE
+	newTransferFrom IN TransferTransaction.transferFrom%TYPE,
+	newTransferTo IN TransferTransaction.transferTo%TYPE,
+    newToBankID IN TransferTransaction.toBankID%TYPE) AS
+	newID ExtendedUser.ID_ExtendedUser%TYPE;
+	check_access NUMBER;
+BEGIN
+	check_access := check_clients_access_right(newAssignClientId, newTransferFrom);
+	IF check_access = 0 THEN
+		RAISE_APPLICATION_ERROR(-20005, 'Warning! Client doesnt have access to account');
+	END IF;
+	SELECT COUNT(*) INTO checkPersonGiveAccess FROM AccountOwner WHERE ID_AccountOwner = newPersonGivesAccess;
+	IF checkPersonGiveAccess = 0 THEN
+		RAISE_APPLICATION_ERROR(-20004, 'Warning! Account owner for new extended user is not valid.');
+	END IF;
+	SELECT MAX(ID_Client) INTO newID FROM Client;
+	IF newID IS NULL THEN
+		newID := 0;
+	ELSE
+		newID := newID + 1;
+	END IF;
+
+	INSERT INTO Client (ID_Client, firstName, secondName, email)
+	VALUES (newID, newFirstName, newSecondName, newEmail);
+	INSERT INTO ExtendedUser(ID_ExtendedUser, personGivesAccess)
+	VALUES (newID, newPersonGivesAccess);
+END;
+/
+
 
 -- test vytvareni noveho ACCOUNTOWNER --
 BEGIN
