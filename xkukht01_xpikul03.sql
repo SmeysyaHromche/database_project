@@ -340,45 +340,6 @@ BEGIN
 END;
 /
 
--- vymaze soucast informace EXTENDED_USER z tabulku CLIENT po vymazeni EXTENDED_USER
---CREATE OR REPLACE TRIGGER delete_extended_client
---	AFTER DELETE ON ExtendedUser
---	FOR EACH ROW
---BEGIN
---	DELETE FROM Client WHERE ID_Client = :OLD.ID_ExtendedUser;
---END;
---/
-
-
--- vymaze soucast informace WITHDRAWAL z tabulku BANKTRANSACTION po vymazeni WITHDRAWAL
---CREATE OR REPLACE TRIGGER delete_withdrawal
---	AFTER DELETE ON WithdrawalTransaction
---	FOR EACH ROW
---BEGIN
---	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_WithdrawalTransaction;
---END;
---/
-
-
--- vymaze soucast informace DEPOSIT z tabulku BANKTRANSACTION po vymazeni DEPOSIT
---CREATE OR REPLACE TRIGGER delete_deposit
---	AFTER DELETE ON DepositTransaction
---	FOR EACH ROW
---BEGIN
---	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_DepositTransaction;
---END;
---/
-
-
--- vymaze soucast informace TRANSFER z tabulku BANKTRANSACTION po vymazeni TRANSFER
---CREATE OR REPLACE TRIGGER delete_transfer
---	AFTER DELETE ON TransferTransaction
---	FOR EACH ROW
---BEGIN
---	DELETE FROM BankTransaction WHERE ID_Transaction = :OLD.ID_TransferTransaction;
---END;
---/
-
 -- EXAMPLES USING TRIGGER
 
 -- test new deposit
@@ -445,25 +406,59 @@ SELECT * FROM BankTransaction;
 SELECT * FROM DepositTransaction;
 SELECT * FROM WithdrawalTransaction;
 SELECT * FROM TransferTransaction;
+	
+-- PROCEDURE --
 
--- FUNCTION --
-
-CREATE FUNCTION check_clients_access_right(
+-- KONTROLA PRISTUPOVYCH PRAV CLIENTA K UCTU --
+CREATE OR REPLACE PROCEDURE check_clients_access_right(
 	id_client NUMBER,
-	id_account NUMBER)
-RETURN INT
-IS ret NUMBER;
+	id_account NUMBER,
+	only_for_owner INT) AS
+	access NUMBER;
+	err_msg VARCHAR(200);
 BEGIN
-	SELECT COUNT(*) INTO ret FROM AccountOwner, Account WHERE id_client = AccountOwner.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner;
-	IF ret = 0 THEN
-		SELECT COUNT(*) INTO ret FROM AccountOwner, Account, ExtendedUser WHERE id_client = ExtendedUser.ID_ExtendedUser AND ExtendedUser.personGivesAccess = Account.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner;
+	-- kontrola ze klient je majitelem uctu
+	SELECT COUNT(*) INTO access FROM AccountOwner, Account WHERE id_client = AccountOwner.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner;
+	IF access = 0 THEN
+		IF only_for_owner = 0 THEN
+			-- kontrola ze client ma poskytovany pristup k uctu
+			SELECT COUNT(*) INTO access FROM AccountOwner, Account, ExtendedUser WHERE id_client = ExtendedUser.ID_ExtendedUser AND ExtendedUser.personGivesAccess = AccountOwner.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner;
+			IF access = 0 THEN
+				err_msg := 'Warning! Client id=' || id_client ||' doesnt have access to manipulation with account id=' || id_account;
+				RAISE_APPLICATION_ERROR(-20005, err_msg);
+			END IF;
+		ELSE 
+			err_msg := 'Warning! Client id=' || id_client ||' doesnt have access to manipulation with account id=' || id_account;
+			RAISE_APPLICATION_ERROR(-20005, err_msg);
+		END IF;
 	END IF;
-	return (ret);
+END;
+/
+-- KONTROLA DENNIHO LIMITU --
+CREATE OR REPLACE PROCEDURE check_day_limit(
+	id_acc IN Account.ID_Account%TYPE,
+	date_tr IN BankTransaction.transactionDate%TYPE,
+	new_ammount IN BankTransaction.ammount%TYPE) AS
+	all_outgoing NUMBER;
+	lim NUMBER;
+	trg NUMBER;
+	err_msg VARCHAR(200);
+BEGIN
+	-- denni limit pro ucet
+	SELECT dayLimit INTO lim FROM Account WHERE Account.ID_Account = id_acc;
+	-- spocitame vse transakce za ten den
+	SELECT SUM(ammount) INTO trg FROM BankTransaction, WithdrawalTransaction WHERE BankTransaction.ID_Transaction = WithdrawalTransaction.ID_WithdrawalTransaction AND BankTransaction.transactionDate = date_tr AND WithdrawalTransaction.withdrawalFrom = id_acc;
+	all_outgoing :=  trg;
+	SELECT SUM(ammount) INTO trg FROM BankTransaction, TransferTransaction WHERE BankTransaction.ID_Transaction = TransferTransaction.ID_TransferTransaction AND BankTransaction.transactionDate = date_tr AND TransferTransaction.transferFrom = id_acc;
+	all_outgoing := all_outgoing + trg + new_ammount;
+	-- kontrola
+	IF all_outgoing >= lim THEN
+		err_msg := 'Warning! New ammount ' || new_ammount || ' exceeds the daily limit on ' || lim || ' for account with id ' || id_acc;
+		RAISE_APPLICATION_ERROR(-20005, err_msg);
+	END IF;
 END;
 /
 
-	
--- PROCEDURE --
 -- VYTVARENI NOVEHO ACCOUNTOWNER --
 CREATE OR REPLACE PROCEDURE create_new_owner(
 	newFirstName IN Client.firstName%TYPE,
@@ -474,12 +469,14 @@ CREATE OR REPLACE PROCEDURE create_new_owner(
 	newDateOfBirthday  IN AccountOwner.dateOfBirthday%TYPE) AS
 	newID AccountOwner.ID_AccountOwner%TYPE;
 BEGIN
+	-- vytvareni noveho id
 	SELECT MAX(ID_Client) INTO newID FROM Client;
 	IF newID IS NULL THEN
 		newID := 0;
 	ELSE
 		newID := newID + 1;
 	END IF;
+	-- ukladani dat
 	INSERT INTO Client (ID_Client, firstName, secondName, email)
 	VALUES (newID, newFirstName, newSecondName, newEmail);
 	INSERT INTO AccountOwner (ID_AccountOwner, nationalID, telephonNumber, dateOfBirthday)
@@ -496,10 +493,12 @@ CREATE OR REPLACE PROCEDURE create_new_extenderd(
 	checkPersonGiveAccess INT;
 	newID ExtendedUser.ID_ExtendedUser%TYPE;
 BEGIN
+	-- controla ze existuje majitel uctu, ktery poskytuje prava
 	SELECT COUNT(*) INTO checkPersonGiveAccess FROM AccountOwner WHERE ID_AccountOwner = newPersonGivesAccess;
 	IF checkPersonGiveAccess = 0 THEN
 		RAISE_APPLICATION_ERROR(-20004, 'Warning! Account owner for new extended user is not valid.');
 	END IF;
+	-- vytvareni noveho id
 	SELECT MAX(ID_Client) INTO newID FROM Client;
 	IF newID IS NULL THEN
 		newID := 0;
@@ -507,6 +506,7 @@ BEGIN
 		newID := newID + 1;
 	END IF;
 
+	-- ukladani dat
 	INSERT INTO Client (ID_Client, firstName, secondName, email)
 	VALUES (newID, newFirstName, newSecondName, newEmail);
 	INSERT INTO ExtendedUser(ID_ExtendedUser, personGivesAccess)
@@ -519,23 +519,21 @@ CREATE OR REPLACE PROCEDURE create_new_deposit(
 	newTransactionDate IN BankTransaction.transactionDate%TYPE,
 	newAssignClientId IN BankTransaction.assignClientId%TYPE,
 	newExecuteWorkerId IN BankTransaction.executeWorkerId%TYPE,
-    newApprovedState IN BankTransaction.approvedState%TYPE
+    newApprovedState IN BankTransaction.approvedState%TYPE,
 	newDepositTo IN DepositTransaction.depositTo%TYPE) AS
 	newID ExtendedUser.ID_ExtendedUser%TYPE;
-	check_access NUMBER;
 BEGIN
-	check_access := check_clients_access_right(newAssignClientId, newDepositTo);
-	IF check_access = 0 THEN
-		RAISE_APPLICATION_ERROR(-20005, 'Warning! Client doesnt have access to account');
-	END IF;
+	-- pokud klient ma pravo pro prace s uctem
+	check_clients_access_right(newAssignClientId, newDepositTo, 0);
+	-- vytvareni noveho id
 	SELECT MAX(ID_Transaction) INTO newID FROM BankTransaction;
 	IF newID IS NULL THEN
 		newID := 0;
 	ELSE
 		newID := newID + 1;
 	END IF;
-
-	INSERT INTO BankTransaction (ID_Client, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+	-- ukladani dat
+	INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
 	VALUES (newID, newAmmount, newTransactionDate, newAssignClientId, newExecuteWorkerId, newApprovedState);
 	INSERT INTO DepositTransaction(ID_DepositTransaction, depositTo)
 	VALUES (newID, newDepositTo);
@@ -547,30 +545,26 @@ CREATE OR REPLACE PROCEDURE create_new_withdrawal(
 	newTransactionDate IN BankTransaction.transactionDate%TYPE,
 	newAssignClientId IN BankTransaction.assignClientId%TYPE,
 	newExecuteWorkerId IN BankTransaction.executeWorkerId%TYPE,
-    newApprovedState IN BankTransaction.approvedState%TYPE
+    newApprovedState IN BankTransaction.approvedState%TYPE,
 	newWithdrawalFrom IN WithdrawalTransaction.withdrawalFrom%TYPE) AS
 	newID ExtendedUser.ID_ExtendedUser%TYPE;
-	check_access NUMBER;
 BEGIN
-	check_access := check_clients_access_right(newAssignClientId, newWithdrawalFrom);
-	IF check_access = 0 THEN
-		RAISE_APPLICATION_ERROR(-20005, 'Warning! Client doesnt have access to account');
-	END IF;
-	SELECT COUNT(*) INTO checkPersonGiveAccess FROM AccountOwner WHERE ID_AccountOwner = newPersonGivesAccess;
-	IF checkPersonGiveAccess = 0 THEN
-		RAISE_APPLICATION_ERROR(-20004, 'Warning! Account owner for new extended user is not valid.');
-	END IF;
-	SELECT MAX(ID_Client) INTO newID FROM Client;
+	-- pokud klient ma pravo pro prace s uctem
+	check_clients_access_right(newAssignClientId, newWithdrawalFrom, 0);
+	-- kontrola limitu
+	check_day_limit(newWithdrawalFrom, newTransactionDate, newAmmount);
+	-- vytvareni noveho id
+	SELECT MAX(ID_Transaction) INTO newID FROM BankTransaction;
 	IF newID IS NULL THEN
 		newID := 0;
 	ELSE
 		newID := newID + 1;
 	END IF;
-
-	INSERT INTO Client (ID_Client, firstName, secondName, email)
-	VALUES (newID, newFirstName, newSecondName, newEmail);
-	INSERT INTO ExtendedUser(ID_ExtendedUser, personGivesAccess)
-	VALUES (newID, newPersonGivesAccess);
+	-- ukladani dat
+	INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+	VALUES (newID, newAmmount, newTransactionDate, newAssignClientId, newExecuteWorkerId, newApprovedState);
+	INSERT INTO WithdrawalTransaction(ID_WithdrawalTransaction, withdrawalFrom)
+	VALUES (newID, newWithdrawalFrom);
 END;
 /
 -- VYTVARENI NOVE TRANSFERTRANSACTION --
@@ -579,32 +573,28 @@ CREATE OR REPLACE PROCEDURE create_new_transfer(
 	newTransactionDate IN BankTransaction.transactionDate%TYPE,
 	newAssignClientId IN BankTransaction.assignClientId%TYPE,
 	newExecuteWorkerId IN BankTransaction.executeWorkerId%TYPE,
-    newApprovedState IN BankTransaction.approvedState%TYPE
+    newApprovedState IN BankTransaction.approvedState%TYPE,
 	newTransferFrom IN TransferTransaction.transferFrom%TYPE,
 	newTransferTo IN TransferTransaction.transferTo%TYPE,
     newToBankID IN TransferTransaction.toBankID%TYPE) AS
 	newID ExtendedUser.ID_ExtendedUser%TYPE;
-	check_access NUMBER;
 BEGIN
-	check_access := check_clients_access_right(newAssignClientId, newTransferFrom);
-	IF check_access = 0 THEN
-		RAISE_APPLICATION_ERROR(-20005, 'Warning! Client doesnt have access to account');
-	END IF;
-	SELECT COUNT(*) INTO checkPersonGiveAccess FROM AccountOwner WHERE ID_AccountOwner = newPersonGivesAccess;
-	IF checkPersonGiveAccess = 0 THEN
-		RAISE_APPLICATION_ERROR(-20004, 'Warning! Account owner for new extended user is not valid.');
-	END IF;
-	SELECT MAX(ID_Client) INTO newID FROM Client;
+	-- pokud klient ma pravo pro prace s uctem
+	check_clients_access_right(newAssignClientId, newTransferFrom, 0);
+	-- kontrola limitu
+	check_day_limit(newTransferFrom, newTransactionDate, newAmmount);
+	-- vytvareni noveho id
+	SELECT MAX(ID_Transaction) INTO newID FROM BankTransaction;
 	IF newID IS NULL THEN
 		newID := 0;
 	ELSE
 		newID := newID + 1;
 	END IF;
-
-	INSERT INTO Client (ID_Client, firstName, secondName, email)
-	VALUES (newID, newFirstName, newSecondName, newEmail);
-	INSERT INTO ExtendedUser(ID_ExtendedUser, personGivesAccess)
-	VALUES (newID, newPersonGivesAccess);
+	-- ukldadani dat
+	INSERT INTO BankTransaction(ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
+	VALUES (newID, newAmmount, newTransactionDate, newAssignClientId, newExecuteWorkerId, newApprovedState);
+	INSERT INTO TransferTransaction(ID_TransferTransaction, transferFrom, transferTo, toBankID)
+	VALUES (newID, newTransferFrom, newTransferTo, newToBankID);
 END;
 /
 
