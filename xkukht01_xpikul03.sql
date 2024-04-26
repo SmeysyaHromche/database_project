@@ -4,6 +4,7 @@
 -- Autori: Myron Kukhta(xkukht01), Artemii Pikulin(xpikul03)
 
 -- DROP TABLES -- 
+DROP PROCEDURE check_clients_access_right;
 DROP TABLE AccountStatementsTranscaction;
 DROP TABLE TransferTransaction;
 DROP TABLE WithdrawalTransaction;
@@ -241,9 +242,9 @@ VALUES (4, 3);
 INSERT INTO Client (firstName, secondName, email)
 VALUES ('Myron', 'Kukhta', 'MyMail@gmail.com');
 INSERT INTO AccountOwner (ID_AccountOwner, nationalID, telephonNumber, dateOfBirthday)
-VALUES (4, '111111/1111', '123456789', TO_DATE('2002-04-21', 'YYYY-MM-DD'));
+VALUES (5, '111111/1111', '123456789', TO_DATE('2002-04-21', 'YYYY-MM-DD'));
 INSERT INTO Account (dayLimit, secretNumber, accountOwner, currency, balance)
-VALUES (10000, '9999', 4, 'USD', 1000);
+VALUES (10000, '9999', 5, 'USD', 1000);
 
 
 -- ADVENCED OBJECTS --
@@ -297,8 +298,8 @@ CREATE OR REPLACE TRIGGER check_transfer
 BEFORE INSERT ON TransferTransaction
 FOR EACH ROW
 DECLARE
-	fromCurrency VARCHAR(3);
-	toCurrency VARCHAR(3);
+	from_currency VARCHAR(3);
+	to_currency VARCHAR(3);
 	tr_ammount NUMBER;
 	from_balance NUMBER;
 	old_balance NUMBER;
@@ -308,9 +309,9 @@ BEGIN
 				--DELETE FROM BankTransaction WHERE ID_Transaction = :NEW.ID_TransferTransaction;
 				RAISE_APPLICATION_ERROR(-20002, 'Warning! In the transfer accounts should be not the same.');
 			END IF;
-			SELECT currency INTO fromCurrency FROM Account WHERE :NEW.transferFrom = ID_Account;
-			SELECT currency INTO toCurrency FROM Account WHERE :NEW.transferTo = ID_Account;
-			IF fromCurrency <> toCurrency THEN			
+			SELECT currency INTO from_currency FROM Account WHERE :NEW.transferFrom = ID_Account;
+			SELECT currency INTO to_currency FROM Account WHERE :NEW.transferTo = ID_Account;
+			IF from_currency <> to_currency THEN			
 				--DELETE FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
 				RAISE_APPLICATION_ERROR(-20003, 'Warning! Transaction only between account with the same currency.');
 			END IF;
@@ -339,7 +340,7 @@ BEGIN
 END;
 /
 
--- EXAMPLES USING TRIGGER
+-- TEST NA  TRIGGERY
 
 -- test new deposit
 INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
@@ -410,24 +411,23 @@ SELECT * FROM TransferTransaction;
 
 -- KONTROLA PRISTUPOVYCH PRAV CLIENTA K UCTU --
 CREATE OR REPLACE PROCEDURE check_clients_access_right(
-	id_client NUMBER,
-	id_account NUMBER,
+	ch_id_client IN Account.accountOwner%TYPE,
+	ch_id_account IN Account.ID_Account%TYPE,
 	only_for_owner INT) AS
 	access NUMBER;
 	err_msg VARCHAR(200);
 BEGIN
-	-- kontrola ze klient je majitelem uctu
-	SELECT COUNT(*) INTO access FROM AccountOwner, Account WHERE id_client = AccountOwner.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner;
+	SELECT COUNT(*) INTO access FROM Account WHERE ID_Account = ch_id_account AND accountOwner=ch_id_client;
 	IF access = 0 THEN
 		IF only_for_owner = 0 THEN
 			-- kontrola ze client ma poskytovany pristup k uctu
-			SELECT COUNT(*) INTO access FROM AccountOwner, Account, ExtendedUser WHERE id_client = ExtendedUser.ID_ExtendedUser AND ExtendedUser.personGivesAccess = AccountOwner.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner;
+			SELECT COUNT(*) INTO access FROM AccountOwner, Account, ExtendedUser WHERE ch_id_client = ExtendedUser.ID_ExtendedUser AND ExtendedUser.personGivesAccess = AccountOwner.ID_AccountOwner AND AccountOwner.ID_AccountOwner = Account.AccountOwner AND Account.ID_Account = ch_id_account;
 			IF access = 0 THEN
-				err_msg := 'Warning! Client id=' || id_client ||' doesnt have access to manipulation with account id=' || id_account;
+				err_msg := 'Warning! Client id=' || ch_id_client ||' doesnt have access to manipulation with account id=' || ch_id_account;
 				RAISE_APPLICATION_ERROR(-20005, err_msg);
 			END IF;
 		ELSE 
-			err_msg := 'Warning! Client id=' || id_client ||' doesnt have access to manipulation with account id=' || id_account;
+			err_msg := 'Warning! Client id=' || ch_id_client ||' doesnt have access to manipulation with account id=' || ch_id_account;
 			RAISE_APPLICATION_ERROR(-20005, err_msg);
 		END IF;
 	END IF;
@@ -448,14 +448,21 @@ BEGIN
 	SELECT dayLimit INTO lim FROM Account WHERE Account.ID_Account = id_acc;
 	-- spocitame vse transakce za ten den
 	SELECT SUM(ammount) INTO trg FROM BankTransaction, WithdrawalTransaction WHERE BankTransaction.ID_Transaction = WithdrawalTransaction.ID_WithdrawalTransaction AND BankTransaction.transactionDate = date_tr AND WithdrawalTransaction.withdrawalFrom = id_acc;
-	all_outgoing :=  trg;
+	IF trg IS NULL THEN
+		all_outgoing :=  0;
+	END If;
 	SELECT SUM(ammount) INTO trg FROM BankTransaction, TransferTransaction WHERE BankTransaction.ID_Transaction = TransferTransaction.ID_TransferTransaction AND BankTransaction.transactionDate = date_tr AND TransferTransaction.transferFrom = id_acc;
-	all_outgoing := all_outgoing + trg + new_ammount;
+	IF trg IS NULL THEN
+		all_outgoing :=  all_outgoing + new_ammount;
+	ELSE
+		all_outgoing := all_outgoing + trg + new_ammount;
+	END If;
 	-- kontrola
 	IF all_outgoing >= lim THEN
 		err_msg := 'Warning! New ammount ' || new_ammount || ' exceeds the daily limit on ' || lim || ' for account with id ' || id_acc;
 		RAISE_APPLICATION_ERROR(-20005, err_msg);
 	END IF;
+	
 END;
 /
 
@@ -534,62 +541,6 @@ BEGIN
 	CLOSE search_cursor_withdrawal;
 END;
 /
-
--- VYTVARENI NOVEHO ACCOUNTOWNER --
-CREATE OR REPLACE PROCEDURE create_new_owner(
-	newFirstName IN Client.firstName%TYPE,
-	newSecondName IN CLIENT.secondName%TYPE,
-	newEmail IN CLIENT.secondName%TYPE,
-	newNationalID IN AccountOwner.nationalID%TYPE,
-	newTelephonNumber IN AccountOwner.telephonNumber%TYPE,
-	newDateOfBirthday  IN AccountOwner.dateOfBirthday%TYPE) AS
-	newID AccountOwner.ID_AccountOwner%TYPE;
-BEGIN
-	-- vytvareni noveho id
-	SELECT MAX(ID_Client) INTO newID FROM Client;
-	IF newID IS NULL THEN
-		newID := 0;
-	ELSE
-		newID := newID + 1;
-	END IF;
-	-- ukladani dat
-	INSERT INTO Client (ID_Client, firstName, secondName, email)
-	VALUES (newID, newFirstName, newSecondName, newEmail);
-	INSERT INTO AccountOwner (ID_AccountOwner, nationalID, telephonNumber, dateOfBirthday)
-	VALUES (newID, newNationalID, newTelephonNumber, newDateOfBirthday);
-END;
-/
-
--- VYTVARENI NOVEHO EXTENDEDUSER --
-CREATE OR REPLACE PROCEDURE create_new_extenderd(
-	newFirstName IN Client.firstName%TYPE,
-	newSecondName IN Client.secondName%TYPE,
-	newEmail IN Client.secondName%TYPE,
-	newPersonGivesAccess IN ExtendedUser.personGivesAccess%TYPE) AS
-	checkPersonGiveAccess INT;
-	newID ExtendedUser.ID_ExtendedUser%TYPE;
-BEGIN
-	-- controla ze existuje majitel uctu, ktery poskytuje prava
-	SELECT COUNT(*) INTO checkPersonGiveAccess FROM AccountOwner WHERE ID_AccountOwner = newPersonGivesAccess;
-	IF checkPersonGiveAccess = 0 THEN
-		RAISE_APPLICATION_ERROR(-20004, 'Warning! Account owner for new extended user is not valid.');
-	END IF;
-	-- vytvareni noveho id
-	SELECT MAX(ID_Client) INTO newID FROM Client;
-	IF newID IS NULL THEN
-		newID := 0;
-	ELSE
-		newID := newID + 1;
-	END IF;
-
-	-- ukladani dat
-	INSERT INTO Client (ID_Client, firstName, secondName, email)
-	VALUES (newID, newFirstName, newSecondName, newEmail);
-	INSERT INTO ExtendedUser(ID_ExtendedUser, personGivesAccess)
-	VALUES (newID, newPersonGivesAccess);
-END;
-/
-
 
 -- VYTVARENI NOVE DEPOSITTRANSACTION --
 CREATE OR REPLACE PROCEDURE create_new_deposit(
@@ -678,44 +629,82 @@ BEGIN
 	VALUES (newID, newTransferFrom, newTransferTo, newToBankID);
 END;
 /
-
-
--- test vytvareni noveho ACCOUNTOWNER --
+SELECT * FROM Client;
+SELECT * FROM AccountOwner;
+SELECT * FROM ExtendedUser;
+SELECT * FROM Account;
+SELECT * FROM BankTransaction;
+SELECT * FROM DEPOSITTRANSACTION;
+SELECT * FROM AccountStatement;
+SELECT * FROM AccountStatementsTranscaction;
+-- TEST NA PROCEDURY --
+-- test check_clients_access_right s cizim uctem pro novy deposit 
 BEGIN
-	create_new_owner('Jack', 'Nicholson', 'JackNicholson@gmail.com', '123456/7891','+420777777777', TO_DATE('1937-04-22', 'YYYY-MM-DD'));
+	create_new_deposit(1000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 2);
 END;
 /
--- test vytvareni noveho EXTENDEDUSER --
+-- test create_new_deposit
 BEGIN
-	create_new_owner('Morgan', 'Freeman', 'MorganFreeman@gmail.com', '123457/7892','+420777777778', TO_DATE('1937-06-01', 'YYYY-MM-DD'));
+	create_new_deposit(1000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 3);
 END;
 /
-
-
--- PRISTUPOVI PRAVA -- 
-GRANT ALL ON AccountStatementsTranscaction TO xpikul03;
-GRANT ALL ON TransferTransaction TO xpikul03;
-GRANT ALL ON WithdrawalTransaction TO xpikul03;
-GRANT ALL ON DepositTransaction TO xpikul03;
-GRANT ALL ON AccountStatement TO xpikul03;
-GRANT ALL ON BankTransaction TO xpikul03;
-GRANT ALL ON ExtendedUser TO xpikul03;
-GRANT ALL ON Worker TO xpikul03;
-GRANT ALL ON Account TO xpikul03;
-GRANT ALL ON AccountOwner TO xpikul03;
-GRANT ALL ON Client TO xpikul03;
-
-GRANT EXECUTE ON check_day_limit TO xpikul03;
-GRANT EXECUTE ON check_clients_access_right TO xpikul03;
-GRANT EXECUTE ON req_acc_statement TO xpikul03;
-GRANT EXECUTE ON create_new_owner TO xpikul03;
-GRANT EXECUTE ON create_new_extenderd TO xpikul03;
-GRANT EXECUTE ON create_new_deposit TO xpikul03;
-GRANT EXECUTE ON create_new_withdrawal TO xpikul03;
-GRANT EXECUTE ON create_new_transfer TO xpikul03;
+-- test na check_day_limit s prkrocennim denniho limitu pro novy withdrawal
+BEGIN
+	create_new_withdrawal(100000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 3);
+END;
+/
+-- test create_new_withdrawal
+BEGIN
+	create_new_withdrawal(500, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 3);
+END;
+/
+-- test create_new_transfer
+BEGIN
+	create_new_transfer(10, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 2, 2, 1, 1, 2, 'XXX-007');
+END;
+/
+-- test na over ze jen majitel uctu muze pozadat stav
+BEGIN
+	req_acc_statement(1, TO_DATE('2024-04-26', 'YYYY-MM-DD'), TO_DATE('2024-08-26', 'YYYY-MM-DD'), TO_DATE('2024-09-26', 'YYYY-MM-DD'), 2);
+END;
+/
+-- test req_acc_statement
+BEGIN
+	req_acc_statement(1, TO_DATE('2024-04-26', 'YYYY-MM-DD'), TO_DATE('2024-08-26', 'YYYY-MM-DD'), TO_DATE('2024-09-26', 'YYYY-MM-DD'), 1);
+END;
+/
 
 SELECT * FROM Client;
 SELECT * FROM AccountOwner;
 SELECT * FROM ExtendedUser;
+SELECT * FROM Account;
+SELECT * FROM BankTransaction;
+SELECT * FROM DEPOSITTRANSACTION;
+SELECT * FROM AccountStatement;
+SELECT * FROM AccountStatementsTranscaction;
+-- PRISTUPOVI PRAVA -- 
+GRANT ALL ON AccountStatementsTranscaction TO xkukht01;
+GRANT ALL ON TransferTransaction TO xkukht01;
+GRANT ALL ON WithdrawalTransaction TO xkukht01;
+GRANT ALL ON DepositTransaction TO xkukht01;
+GRANT ALL ON AccountStatement TO xkukht01;
+GRANT ALL ON BankTransaction TO xkukht01;
+GRANT ALL ON ExtendedUser TO xkukht01;
+GRANT ALL ON Worker TO xkukht01;
+GRANT ALL ON Account TO xkukht01;
+GRANT ALL ON AccountOwner TO xkukht01;
+GRANT ALL ON Client TO xkukht01;
 
--- test vytvareni noveho EXTENDEDUSER --
+GRANT EXECUTE ON check_day_limit TO xkukht01;
+GRANT EXECUTE ON check_clients_access_right TO xkukht01;
+GRANT EXECUTE ON req_acc_statement TO xkukht01;
+GRANT EXECUTE ON create_new_deposit TO xkukht01;
+GRANT EXECUTE ON create_new_withdrawal TO xkukht01;
+GRANT EXECUTE ON create_new_transfer TO xkukht01;
+
+
+--BEGIN
+--	create_new_deposit(1000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 3);
+--END;
+--/
+
