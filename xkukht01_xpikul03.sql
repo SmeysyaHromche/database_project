@@ -1,9 +1,9 @@
 -- IDS
--- Projekt 3. cast: SQL skript pro vytvoreni objektu schematu databaze
+-- Projekt 4. cast: SQL skript pro vytvoreni prokorcilich objektu schematu databaze
 -- Temata: c. 26 'Banka'
 -- Autori: Myron Kukhta(xkukht01), Artemii Pikulin(xpikul03)
 
--- DROP TABLES --  
+-- DROP TABLES -- 
 DROP TABLE AccountStatementsTranscaction;
 DROP TABLE TransferTransaction;
 DROP TABLE WithdrawalTransaction;
@@ -248,7 +248,6 @@ VALUES (10000, '9999', 4, 'USD', 1000);
 
 -- ADVENCED OBJECTS --
 
-
 -- TRIGGERS --
 
 -- over podminek pro tranzakce typu WITHDRAWAL --
@@ -434,6 +433,8 @@ BEGIN
 	END IF;
 END;
 /
+
+
 -- KONTROLA DENNIHO LIMITU --
 CREATE OR REPLACE PROCEDURE check_day_limit(
 	id_acc IN Account.ID_Account%TYPE,
@@ -459,6 +460,83 @@ BEGIN
 END;
 /
 
+
+-- REQUEST NA NOVY ACCOUNTSTATEMENT --
+CREATE OR REPLACE PROCEDURE req_acc_statement(
+	newAccountID IN AccountStatement.accountId%TYPE,
+	newAtualDate IN AccountStatement.actualDate%TYPE,
+	newFromDate IN AccountStatement.fromDate%TYPE,
+	newToDate IN AccountStatement.toDate%TYPE,
+	newRequestedOwner IN AccountStatement.requestedOwner%TYPE)AS
+
+	-- cursor pro hledani TRANSFERTRANSACTION
+	CURSOR search_cursor_transfer IS
+	SELECT ID_Transaction FROM BankTransaction, TransferTransaction , Account
+	WHERE BankTransaction.ID_Transaction = TransferTransaction.ID_TransferTransaction
+	AND (BankTransaction.transactionDate >= newFromDate OR BankTransaction.transactionDate <= newToDate)
+	AND TransferTransaction.transferFrom = Account.ID_Account AND Account.accountOwner = newRequestedOwner;
+	
+	-- cursor pro hledani DEPOSITTRANSACTION
+	CURSOR search_cursor_deposit IS
+	SELECT ID_Transaction FROM BankTransaction, DepositTransaction , Account
+	WHERE BankTransaction.ID_Transaction = DepositTransaction.ID_DepositTransaction
+	AND (BankTransaction.transactionDate >= newFromDate OR BankTransaction.transactionDate <= newToDate)
+	AND DepositTransaction.depositTo = Account.ID_Account AND Account.accountOwner = newRequestedOwner;
+
+	-- cursor pro hledani WITHDRAWALTRANSACTION
+	CURSOR search_cursor_withdrawal IS
+	SELECT ID_Transaction FROM BankTransaction, WithdrawalTransaction , Account
+	WHERE BankTransaction.ID_Transaction = WithdrawalTransaction.ID_WithdrawalTransaction
+	AND (BankTransaction.transactionDate >= newFromDate OR BankTransaction.transactionDate <= newToDate)
+	AND WithdrawalTransaction.withdrawalFrom = Account.ID_Account AND Account.accountOwner = newRequestedOwner; 
+	
+	newID AccountStatement.ID_AccountStatement%TYPE;
+	trID BankTransaction.ID_Transaction%TYPE;
+BEGIN
+	-- pokud klient ma pravo pro prace s uctem
+	check_clients_access_right(newRequestedOwner, newAccountID, 1);
+	-- vytvareni noveho id
+	SELECT MAX(ID_Client) INTO newID FROM Client;
+	IF newID IS NULL THEN
+		newID := 0;
+	ELSE
+		newID := newID + 1;
+	END IF;
+
+	-- vyrvareni noveho ACCOUNTSTATEMENT
+	INSERT INTO  AccountStatement(ID_AccountStatement, accountId, actualDate, fromDate, toDate, requestedOwner)
+	VALUES (newID, newAccountID, newAtualDate, newFromDate, newToDate, newRequestedOwner);
+	-- hledani tranzakce mezi TRANSFERTRANSACTION
+	OPEN search_cursor_transfer;
+	LOOP 
+		FETCH search_cursor_transfer INTO trID;
+		EXIT WHEN search_cursor_transfer%NOTFOUND;
+		INSERT INTO AccountStatementsTranscaction(accountStatementId, transactionId)
+		VALUES (newID, trID);
+	END LOOP;
+	CLOSE search_cursor_transfer;
+	-- hledani tranzakce mezi DEPOSITTRANSACTION
+	OPEN search_cursor_deposit;
+	LOOP 
+		FETCH search_cursor_deposit INTO trID;
+		EXIT WHEN search_cursor_deposit%NOTFOUND;
+		INSERT INTO AccountStatementsTranscaction(accountStatementId, transactionId)
+		VALUES (newID, trID);
+	END LOOP;
+	CLOSE search_cursor_deposit;
+	-- hledani tranzakce mezi WITHDRAWALTRANSACTION
+	OPEN search_cursor_withdrawal;
+	LOOP 
+		FETCH search_cursor_withdrawal INTO trID;
+		EXIT WHEN search_cursor_withdrawal%NOTFOUND;
+		INSERT INTO AccountStatementsTranscaction(accountStatementId, transactionId)
+		VALUES (newID, trID);
+	END LOOP;
+	CLOSE search_cursor_withdrawal;
+END;
+/
+
+
 -- VYTVARENI NOVEHO ACCOUNTOWNER --
 CREATE OR REPLACE PROCEDURE create_new_owner(
 	newFirstName IN Client.firstName%TYPE,
@@ -483,6 +561,7 @@ BEGIN
 	VALUES (newID, newNationalID, newTelephonNumber, newDateOfBirthday);
 END;
 /
+
 
 -- VYTVARENI NOVEHO EXTENDEDUSER --
 CREATE OR REPLACE PROCEDURE create_new_extenderd(
@@ -513,6 +592,8 @@ BEGIN
 	VALUES (newID, newPersonGivesAccess);
 END;
 /
+
+
 -- VYTVARENI NOVE DEPOSITTRANSACTION --
 CREATE OR REPLACE PROCEDURE create_new_deposit(
 	newAmmount IN BankTransaction.ammount%TYPE,
@@ -539,6 +620,8 @@ BEGIN
 	VALUES (newID, newDepositTo);
 END;
 /
+
+
 -- VYTVARENI NOVE WITHDRAWALTRANSACTION --
 CREATE OR REPLACE PROCEDURE create_new_withdrawal(
 	newAmmount IN BankTransaction.ammount%TYPE,
@@ -567,6 +650,8 @@ BEGIN
 	VALUES (newID, newWithdrawalFrom);
 END;
 /
+
+
 -- VYTVARENI NOVE TRANSFERTRANSACTION --
 CREATE OR REPLACE PROCEDURE create_new_transfer(
 	newAmmount IN BankTransaction.ammount%TYPE,
