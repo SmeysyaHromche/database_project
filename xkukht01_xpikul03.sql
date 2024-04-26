@@ -703,8 +703,3 @@ GRANT EXECUTE ON create_new_withdrawal TO xkukht01;
 GRANT EXECUTE ON create_new_transfer TO xkukht01;
 
 
---BEGIN
---	create_new_deposit(1000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 3);
---END;
---/
-
