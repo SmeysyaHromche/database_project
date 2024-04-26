@@ -434,7 +434,6 @@ BEGIN
 END;
 /
 
-
 -- KONTROLA DENNIHO LIMITU --
 CREATE OR REPLACE PROCEDURE check_day_limit(
 	id_acc IN Account.ID_Account%TYPE,
@@ -536,7 +535,6 @@ BEGIN
 END;
 /
 
-
 -- VYTVARENI NOVEHO ACCOUNTOWNER --
 CREATE OR REPLACE PROCEDURE create_new_owner(
 	newFirstName IN Client.firstName%TYPE,
@@ -561,7 +559,6 @@ BEGIN
 	VALUES (newID, newNationalID, newTelephonNumber, newDateOfBirthday);
 END;
 /
-
 
 -- VYTVARENI NOVEHO EXTENDEDUSER --
 CREATE OR REPLACE PROCEDURE create_new_extenderd(
@@ -620,7 +617,6 @@ BEGIN
 	VALUES (newID, newDepositTo);
 END;
 /
-
 
 -- VYTVARENI NOVE WITHDRAWALTRANSACTION --
 CREATE OR REPLACE PROCEDURE create_new_withdrawal(
@@ -695,7 +691,31 @@ BEGIN
 END;
 /
 
+
+-- PRISTUPOVI PRAVA -- 
+GRANT ALL ON AccountStatementsTranscaction TO xpikul03;
+GRANT ALL ON TransferTransaction TO xpikul03;
+GRANT ALL ON WithdrawalTransaction TO xpikul03;
+GRANT ALL ON DepositTransaction TO xpikul03;
+GRANT ALL ON AccountStatement TO xpikul03;
+GRANT ALL ON BankTransaction TO xpikul03;
+GRANT ALL ON ExtendedUser TO xpikul03;
+GRANT ALL ON Worker TO xpikul03;
+GRANT ALL ON Account TO xpikul03;
+GRANT ALL ON AccountOwner TO xpikul03;
+GRANT ALL ON Client TO xpikul03;
+
+GRANT EXECUTE ON check_day_limit TO xpikul03;
+GRANT EXECUTE ON check_clients_access_right TO xpikul03;
+GRANT EXECUTE ON req_acc_statement TO xpikul03;
+GRANT EXECUTE ON create_new_owner TO xpikul03;
+GRANT EXECUTE ON create_new_extenderd TO xpikul03;
+GRANT EXECUTE ON create_new_deposit TO xpikul03;
+GRANT EXECUTE ON create_new_withdrawal TO xpikul03;
+GRANT EXECUTE ON create_new_transfer TO xpikul03;
+
 SELECT * FROM Client;
 SELECT * FROM AccountOwner;
 SELECT * FROM ExtendedUser;
+
 -- test vytvareni noveho EXTENDEDUSER --
