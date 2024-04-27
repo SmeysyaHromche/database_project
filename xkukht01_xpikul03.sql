@@ -4,6 +4,7 @@
 -- Autori: Myron Kukhta(xkukht01), Artemii Pikulin(xpikul03)
 
 -- DROP TABLES -- 
+DROP INDEX executeWorkerId_index;
 DROP MATERIALIZED VIEW search_not_approved_transaction;
 DROP PROCEDURE create_new_deposit;
 DROP PROCEDURE create_new_withdrawal;
@@ -635,7 +636,7 @@ BEGIN
 	create_new_deposit(1000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 2);
 END;
 /
-test create_new_deposit
+--test create_new_deposit
 BEGIN
 	create_new_deposit(1000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 3);
 END;
@@ -717,8 +718,27 @@ REFRESH ON COMMIT AS
 
 -- priklad pouziti prohledu
 SELECT * FROM search_not_approved_transaction WHERE ID_Worker = 1;
--- zmena
-UPDATE BankTransaction SET approvedState = 1 WHERE ID_Transaction = 8;
-COMMIT;
--- priklad zmeny pohledu
-SELECT * FROM search_not_approved_transaction WHERE ID_Worker = 1;
+
+-- EXPLAIN PLAN --
+-- nalez poctu vypracovanych tranzakce pracovnikem banku
+EXPLAIN PLAN FOR
+SELECT Worker.ID_Worker, Worker.firstName, COUNT(BankTransaction.ID_Transaction) AS WORKED_WITH
+FROM Worker, BankTransaction
+WHERE BankTransaction.executeWorkerId = Worker.ID_Worker
+GROUP BY Worker.ID_Worker, Worker.firstName;
+
+-- output vykonnosti selectu z EXPLAIN PLAN
+SELECT plan_table_output FROM table ( DBMS_XPLAN.DISPLAY() ); 
+
+-- vytvareni indexu pro optimalizace
+CREATE INDEX executeWorkerId_index ON BankTransaction(executeWorkerId);
+
+-- optimalizovani  EXPLAIN PLAN
+EXPLAIN PLAN FOR
+SELECT Worker.ID_Worker, Worker.firstName, COUNT(BankTransaction.ID_Transaction) AS WORKED_WITH
+FROM Worker, BankTransaction
+WHERE BankTransaction.executeWorkerId = Worker.ID_Worker
+GROUP BY Worker.ID_Worker, Worker.firstName;
+
+-- output vykonnosti selectu z EXPLAIN PLAN
+SELECT plan_table_output FROM table ( DBMS_XPLAN.DISPLAY() );
