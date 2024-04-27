@@ -698,14 +698,15 @@ GRANT EXECUTE ON create_new_transfer TO xpikul03;
 
 -- priklad nepovolene transakce
 
--- MATERIALIZOVANY POHLED --
--- Pohled stara se najit nepovolene transakce
-
 -- priklad nepovolene tranzakce
 BEGIN
 	create_new_transfer(5, TO_DATE('2024-04-27', 'YYYY-MM-DD'), 1, 1, 0, 1, 2, 'XXX-007');
 END;
 /
+
+-- MATERIALIZOVANY POHLED --
+-- Pohled stara se najit nepovolene transakce
+-- pro spusteni druhym clenem tymy
 CREATE MATERIALIZED VIEW search_not_approved_transaction
 NOLOGGING
 CACHE
