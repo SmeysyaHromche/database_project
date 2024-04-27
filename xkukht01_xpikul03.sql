@@ -4,7 +4,16 @@
 -- Autori: Myron Kukhta(xkukht01), Artemii Pikulin(xpikul03)
 
 -- DROP TABLES -- 
+DROP MATERIALIZED VIEW search_not_approved_transaction;
+DROP PROCEDURE create_new_deposit;
+DROP PROCEDURE create_new_withdrawal;
+DROP PROCEDURE create_new_transfer;
 DROP PROCEDURE check_clients_access_right;
+DROP PROCEDURE check_day_limit;
+DROP PROCEDURE req_acc_statement;
+DROP TRIGGER trigger_transfer;
+DROP TRIGGER trigger_withdrawal;
+DROP TRIGGER trigger_deposite;
 DROP TABLE AccountStatementsTranscaction;
 DROP TABLE TransferTransaction;
 DROP TABLE WithdrawalTransaction;
@@ -251,8 +260,8 @@ VALUES (10000, '9999', 5, 'USD', 1000);
 
 -- TRIGGERS --
 
--- over podminek pro tranzakce typu WITHDRAWAL --
-CREATE OR REPLACE TRIGGER check_withdrawal
+-- over podminek a provedeni tranzakce typu WITHDRAWAL --
+CREATE OR REPLACE TRIGGER trigger_withdrawal
 BEFORE INSERT ON WithdrawalTransaction
 FOR EACH ROW
 DECLARE
@@ -265,23 +274,12 @@ BEGIN
 		DELETE FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
 		RAISE_APPLICATION_ERROR(-20001, 'Warning! There are not enough funds in the account to complete the transaction');
 	END IF;
-END;
-/
-
--- actualizace stave uctu po provedeni tranzakce typu WITHDRAWAL --
-CREATE OR REPLACE TRIGGER do_withdrawal
-AFTER INSERT ON WithdrawalTransaction
-FOR EACH ROW
-DECLARE
-	tr_ammount NUMBER;
-BEGIN
-	SELECT ammount INTO tr_ammount FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
 	UPDATE Account SET balance = balance - tr_ammount WHERE ID_Account = :NEW.withdrawalFrom;
 END;
 /
 
--- actualizace stave uctu po provedeni tranzakce typu DEPOSIT --
-CREATE OR REPLACE TRIGGER do_deposite
+-- provedeni tranzakce typu DEPOSIT --
+CREATE OR REPLACE TRIGGER trigger_deposite
 AFTER INSERT ON DepositTransaction
 FOR EACH ROW
 DECLARE
@@ -293,8 +291,8 @@ END;
 /
 
 
--- over podminek pro tranzakce typu TRANSFER --
-CREATE OR REPLACE TRIGGER check_transfer
+-- provedeni tranzakce typu TRANSFER --
+CREATE OR REPLACE TRIGGER trigger_transfer
 BEFORE INSERT ON TransferTransaction
 FOR EACH ROW
 DECLARE
@@ -306,33 +304,19 @@ DECLARE
 BEGIN
 	IF :NEW.toBankID = 'XXX-007' THEN
 			IF :NEW.transferFrom = :NEW.transferTo THEN			
-				--DELETE FROM BankTransaction WHERE ID_Transaction = :NEW.ID_TransferTransaction;
 				RAISE_APPLICATION_ERROR(-20002, 'Warning! In the transfer accounts should be not the same.');
 			END IF;
 			SELECT currency INTO from_currency FROM Account WHERE :NEW.transferFrom = ID_Account;
 			SELECT currency INTO to_currency FROM Account WHERE :NEW.transferTo = ID_Account;
 			IF from_currency <> to_currency THEN			
-				--DELETE FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
 				RAISE_APPLICATION_ERROR(-20003, 'Warning! Transaction only between account with the same currency.');
 			END IF;
 	END IF;
 	SELECT ammount INTO tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
 	SELECT balance INTO old_balance FROM Account WHERE :NEW.transferFrom = ID_Account;
 	IF old_balance < tr_ammount THEN
-		--DELETE FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
 		RAISE_APPLICATION_ERROR(-20001, 'Warning! There are not enough funds in the account to complete the transaction');
 	END IF;
-END;
-/
-
--- actualizace stave uctu po provedeni tranzakce typu TRANSFER --
-CREATE OR REPLACE TRIGGER do_transfer
-AFTER INSERT ON TransferTransaction
-FOR EACH ROW
-DECLARE
-	tr_ammount NUMBER;
-BEGIN
-	SELECT ammount INTO tr_ammount FROM BankTransaction WHERE :NEW.ID_TransferTransaction = ID_Transaction;
 	UPDATE Account SET balance = balance - tr_ammount WHERE ID_Account = :NEW.transferFrom;
 	IF :NEW.toBankID = 'XXX-007' THEN
 		UPDATE Account SET balance = balance + tr_ammount WHERE ID_Account = :NEW.transferTo;
@@ -406,7 +390,7 @@ SELECT * FROM BankTransaction;
 SELECT * FROM DepositTransaction;
 SELECT * FROM WithdrawalTransaction;
 SELECT * FROM TransferTransaction;
-	
+
 -- PROCEDURE --
 
 -- KONTROLA PRISTUPOVYCH PRAV CLIENTA K UCTU --
@@ -551,6 +535,7 @@ CREATE OR REPLACE PROCEDURE create_new_deposit(
     newApprovedState IN BankTransaction.approvedState%TYPE,
 	newDepositTo IN DepositTransaction.depositTo%TYPE) AS
 	newID ExtendedUser.ID_ExtendedUser%TYPE;
+--	exc_access_right EXCEPTION;
 BEGIN
 	-- pokud klient ma pravo pro prace s uctem
 	check_clients_access_right(newAssignClientId, newDepositTo, 0);
@@ -566,6 +551,11 @@ BEGIN
 	VALUES (newID, newAmmount, newTransactionDate, newAssignClientId, newExecuteWorkerId, newApprovedState);
 	INSERT INTO DepositTransaction(ID_DepositTransaction, depositTo)
 	VALUES (newID, newDepositTo);
+EXCEPTION
+	WHEN others THEN
+		IF sqlcode=-20005 THEN
+			DBMS_OUTPUT.PUT_LINE('User id=' || newAssignClientId || 'is not have permission to account id=' || newDepositTo);
+	END IF;
 END;
 /
 
@@ -610,6 +600,7 @@ CREATE OR REPLACE PROCEDURE create_new_transfer(
 	newTransferTo IN TransferTransaction.transferTo%TYPE,
     newToBankID IN TransferTransaction.toBankID%TYPE) AS
 	newID ExtendedUser.ID_ExtendedUser%TYPE;
+	checkAllBalance Account.balance%TYPE;
 BEGIN
 	-- pokud klient ma pravo pro prace s uctem
 	check_clients_access_right(newAssignClientId, newTransferFrom, 0);
@@ -637,17 +628,19 @@ SELECT * FROM BankTransaction;
 SELECT * FROM DEPOSITTRANSACTION;
 SELECT * FROM AccountStatement;
 SELECT * FROM AccountStatementsTranscaction;
+
 -- TEST NA PROCEDURY --
 -- test check_clients_access_right s cizim uctem pro novy deposit 
 BEGIN
 	create_new_deposit(1000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 2);
 END;
 /
--- test create_new_deposit
+test create_new_deposit
 BEGIN
 	create_new_deposit(1000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 3);
 END;
 /
+
 -- test na check_day_limit s prkrocennim denniho limitu pro novy withdrawal
 BEGIN
 	create_new_withdrawal(100000, TO_DATE('2024-04-26', 'YYYY-MM-DD'), 5, 2, 1, 3);
@@ -683,23 +676,49 @@ SELECT * FROM DEPOSITTRANSACTION;
 SELECT * FROM AccountStatement;
 SELECT * FROM AccountStatementsTranscaction;
 -- PRISTUPOVI PRAVA -- 
-GRANT ALL ON AccountStatementsTranscaction TO xkukht01;
-GRANT ALL ON TransferTransaction TO xkukht01;
-GRANT ALL ON WithdrawalTransaction TO xkukht01;
-GRANT ALL ON DepositTransaction TO xkukht01;
-GRANT ALL ON AccountStatement TO xkukht01;
-GRANT ALL ON BankTransaction TO xkukht01;
-GRANT ALL ON ExtendedUser TO xkukht01;
-GRANT ALL ON Worker TO xkukht01;
-GRANT ALL ON Account TO xkukht01;
-GRANT ALL ON AccountOwner TO xkukht01;
-GRANT ALL ON Client TO xkukht01;
+GRANT ALL ON AccountStatementsTranscaction TO xpikul03;
+GRANT ALL ON TransferTransaction TO xpikul03;
+GRANT ALL ON WithdrawalTransaction TO xpikul03;
+GRANT ALL ON DepositTransaction TO xpikul03;
+GRANT ALL ON AccountStatement TO xpikul03;
+GRANT ALL ON BankTransaction TO xpikul03;
+GRANT ALL ON ExtendedUser TO xpikul03;
+GRANT ALL ON Worker TO xpikul03;
+GRANT ALL ON Account TO xpikul03;
+GRANT ALL ON AccountOwner TO xpikul03;
+GRANT ALL ON Client TO xpikul03;
 
-GRANT EXECUTE ON check_day_limit TO xkukht01;
-GRANT EXECUTE ON check_clients_access_right TO xkukht01;
-GRANT EXECUTE ON req_acc_statement TO xkukht01;
-GRANT EXECUTE ON create_new_deposit TO xkukht01;
-GRANT EXECUTE ON create_new_withdrawal TO xkukht01;
-GRANT EXECUTE ON create_new_transfer TO xkukht01;
+GRANT EXECUTE ON check_day_limit TO xpikul03;
+GRANT EXECUTE ON check_clients_access_right TO xpikul03;
+GRANT EXECUTE ON req_acc_statement TO xpikul03;
+GRANT EXECUTE ON create_new_deposit TO xpikul03;
+GRANT EXECUTE ON create_new_withdrawal TO xpikul03;
+GRANT EXECUTE ON create_new_transfer TO xpikul03;
+
+-- priklad nepovolene transakce
+
+-- MATERIALIZOVANY POHLED --
+-- Pohled stara se najit nepovolene transakce
+
+-- priklad nepovolene tranzakce
+BEGIN
+	create_new_transfer(5, TO_DATE('2024-04-27', 'YYYY-MM-DD'), 1, 1, 0, 1, 2, 'XXX-007');
+END;
+/
+CREATE MATERIALIZED VIEW search_not_approved_transaction
+NOLOGGING
+CACHE
+BUILD IMMEDIATE
+REFRESH ON COMMIT AS
+	SELECT Worker.ID_Worker, Client.ID_Client, BankTransaction.ID_Transaction
+	FROM Client, BankTransaction, Worker
+	WHERE Client.ID_Client = BankTransaction.assignClientId AND BankTransaction.approvedState = 0 AND BankTransaction.executeWorkerId = Worker.ID_Worker;
 
 
+-- priklad pouziti prohledu
+SELECT * FROM search_not_approved_transaction WHERE ID_Worker = 1;
+-- zmena
+UPDATE BankTransaction SET approvedState = 1 WHERE ID_Transaction = 8;
+COMMIT;
+-- priklad zmeny pohledu
+SELECT * FROM search_not_approved_transaction WHERE ID_Worker = 1;
