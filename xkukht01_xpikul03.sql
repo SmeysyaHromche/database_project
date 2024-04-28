@@ -272,7 +272,6 @@ BEGIN
 	SELECT ammount INTO tr_ammount FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
 	SELECT balance INTO old_balance FROM Account WHERE :NEW.withdrawalFrom = ID_Account;
 	IF old_balance < tr_ammount THEN
-		DELETE FROM BankTransaction WHERE :NEW.ID_WithdrawalTransaction = ID_Transaction;
 		RAISE_APPLICATION_ERROR(-20001, 'Warning! There are not enough funds in the account to complete the transaction');
 	END IF;
 	UPDATE Account SET balance = balance - tr_ammount WHERE ID_Account = :NEW.withdrawalFrom;
