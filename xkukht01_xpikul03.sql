@@ -330,20 +330,12 @@ END;
 INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
 VALUES  (1, 1, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 4, 2, 1);
 INSERT INTO DepositTransaction (ID_DepositTransaction, depositTo)
-VALUES(1, 3);
+VALUES(1, 2);
 
 INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
 VALUES  (2, 200, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
 INSERT INTO DepositTransaction (ID_DepositTransaction, depositTo)
 VALUES(2, 1);
-
--- test bad transfer with the same accounts
-INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
-VALUES  (3, 10000000000000, TO_DATE('2024-09-01', 'YYYY-MM-DD'), 1, 2, 1);
-INSERT INTO TransferTransaction (ID_TransferTransaction, transferFrom, transferTo)
-VALUES(3, 2, 2);
-DELETE FROM BankTransaction WHERE ID_Transaction = 3;
-
 
 -- test bad transfer with the same accounts
 INSERT INTO BankTransaction (ID_Transaction, ammount, transactionDate, assignClientId, executeWorkerId, approvedState)
@@ -535,7 +527,6 @@ CREATE OR REPLACE PROCEDURE create_new_deposit(
     newApprovedState IN BankTransaction.approvedState%TYPE,
 	newDepositTo IN DepositTransaction.depositTo%TYPE) AS
 	newID ExtendedUser.ID_ExtendedUser%TYPE;
---	exc_access_right EXCEPTION;
 BEGIN
 	-- pokud klient ma pravo pro prace s uctem
 	check_clients_access_right(newAssignClientId, newDepositTo, 0);
@@ -620,14 +611,6 @@ BEGIN
 	VALUES (newID, newTransferFrom, newTransferTo, newToBankID);
 END;
 /
-SELECT * FROM Client;
-SELECT * FROM AccountOwner;
-SELECT * FROM ExtendedUser;
-SELECT * FROM Account;
-SELECT * FROM BankTransaction;
-SELECT * FROM DEPOSITTRANSACTION;
-SELECT * FROM AccountStatement;
-SELECT * FROM AccountStatementsTranscaction;
 
 -- TEST NA PROCEDURY --
 -- test check_clients_access_right s cizim uctem pro novy deposit 
@@ -667,14 +650,6 @@ BEGIN
 END;
 /
 
-SELECT * FROM Client;
-SELECT * FROM AccountOwner;
-SELECT * FROM ExtendedUser;
-SELECT * FROM Account;
-SELECT * FROM BankTransaction;
-SELECT * FROM DEPOSITTRANSACTION;
-SELECT * FROM AccountStatement;
-SELECT * FROM AccountStatementsTranscaction;
 -- PRISTUPOVI PRAVA -- 
 GRANT ALL ON AccountStatementsTranscaction TO xpikul03;
 GRANT ALL ON TransferTransaction TO xpikul03;
