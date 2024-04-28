@@ -743,3 +743,24 @@ GROUP BY Worker.ID_Worker, Worker.firstName;
 
 -- output vykonnosti selectu z EXPLAIN PLAN
 SELECT plan_table_output FROM table ( DBMS_XPLAN.DISPLAY() );
+
+-- KOMPLEXNI SELECT --
+-- kvalifikuje ucty na zaklade poctu ruznych druhu tranzakce
+WITH account_analys AS(
+	SELECT A.ID_Account as acc,
+	(SELECT COUNT(*) FROM DepositTransaction WHERE depositTo = A.ID_Account) AS cntDeposit,
+	(SELECT COUNT(*) FROM TransferTransaction WHERE transferFrom = A.ID_Account ) AS cntTransfer,
+	(SELECT COUNT(*) FROM WithdrawalTransaction WHERE withdrawalFrom = A.ID_Account ) AS cntWithdrawal
+	FROM Account A
+)
+SELECT C.ID_Client AS cl_id, C.firstName AS cl_name, C.secondName AS cl_second_name, C.email AS cl_mail, A.ID_Account AS id_acc, AA.cntDeposit, AA.cntTransfer, AA.cntWithdrawal,
+	CASE
+		WHEN AA.cntDeposit > AA.cntTransfer + AA.cntWithdrawal THEN 'Savings account'
+		WHEN AA.cntTransfer > AA.cntDeposit + AA.cntWithdrawal THEN 'Communication account'
+		WHEN AA.cntWithdrawal > AA.cntDeposit + AA.cntTransfer THEN 'Cash out account'
+		ELSE 'Base using account'
+		END AS acc_qualification
+FROM
+Client C
+JOIN Account A ON C.ID_Client = A.AccountOwner
+JOIN account_analys AA ON A.ID_Account = AA.acc;
